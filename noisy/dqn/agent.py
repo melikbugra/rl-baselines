@@ -123,6 +123,7 @@ class DQNAgent:
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
 
+        # Noisy reset noise
         self.policy_net.reset_noise()
         self.target_net.reset_noise()
 
