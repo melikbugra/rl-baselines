@@ -98,8 +98,6 @@ class DQNAgent:
         if self.beta > 1:
             self.beta = 1
 
-        print(self.beta)
-
     def optimize_model(self):
         if len(self.memory) < self.batch_size:
             return
