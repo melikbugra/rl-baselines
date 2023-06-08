@@ -30,10 +30,12 @@ class MLP(nn.Module):
 
         feature = self.feature_layer(x)
 
+        x = feature
         for i in range(len(self.value_layer) - 1):
             x = F.relu(self.value_layer[i](feature))
         value = self.value_layer[-1](x)
 
+        x = feature
         for i in range(len(self.advantage_layer) - 1):
             x = F.relu(self.advantage_layer[i](feature))
         advantage = self.advantage_layer[-1](x)
