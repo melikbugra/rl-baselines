@@ -1,0 +1,18 @@
+{
+    "observation": {
+        "type": "OccupancyGrid",
+        "vehicles_count": 5,
+        "features": ["presence", "x", "y", "vx", "vy"],
+        "features_range": {
+            "x": [-100, 100],
+            "y": [-100, 100],
+            "vx": [-20, 20],
+            "vy": [-20, 20]
+        },
+        "grid_size": [[-27.5, 27.5], [-12.5, 12.5]],
+        "grid_step": [5, 5],
+        "absolute": false
+    },
+    "lanes_count": 4,
+    "duration": 40
+}

@@ -25,7 +25,7 @@ class DQNAgent:
                  # Categorical
                  v_min: float = 0.0, v_max: float = 200.0, atom_size: int = 51,
                  # N-Step
-                 n_step: int = 3):
+                 n_step: int = 5):
         self.env = env
         self.state_size = np.prod(self.env.observation_space.shape)
         self.action_size = self.env.action_space.n
@@ -229,11 +229,12 @@ class DQNAgent:
     def save_model(self, env_name: str, checkpoint = ""):
         torch.save(self.policy_net.state_dict(), f"dqn/{env_name}_{checkpoint}.ckpt")
 
-    def evaluate(self, env_name: str, episodes: int):
-        env = gym.make(env_name)
+    def evaluate(self, env_name: str, episodes: int, config):
+        env = gym.make(env_name, config=config)
         scores = []
         for episode in range(episodes):
-            state, info = env.reset()
+            self.policy_net.load_state_dict(torch.load(f"/home/melikozcelik/rl-projects/rainbow_gym/rainbow/dqn/highway-fast-v0_recent.ckpt"))
+            state = env.reset()
             state = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0).view(1, -1)
             score = 0
 
@@ -241,23 +242,18 @@ class DQNAgent:
                 env.render()
                 
                 action = self.select_greedy_action(state)
-                observation, reward, terminated, truncated, _ = env.step(action.item())
+                observation, reward, done, _ = env.step(action.item())
                 score += reward
                 reward = torch.tensor([reward], device=self.device)
-                done = terminated or truncated
 
-                if terminated:
-                    next_state = None
-                else:
-                    next_state = torch.tensor(observation, dtype=torch.float32, device=self.device).unsqueeze(0).view(1, -1)
+                next_state = torch.tensor(observation, dtype=torch.float32, device=self.device).unsqueeze(0).view(1, -1)
 
                 # Move to the next state
                 state = next_state
 
                 if done:
                     scores.append(score)
-                    # print(f"Episode score: {score}")
-                    sleep(1)
+                    print(f"Episode score: {score}")
                     break
 
         return np.mean(scores)

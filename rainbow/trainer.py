@@ -15,6 +15,8 @@ from collections import deque
 from dqn.replay_memory import Transition
 from dqn.agent import DQNAgent
 
+import highway_env
+
 
 
 class Trainer:
@@ -24,7 +26,10 @@ class Trainer:
 
         self.env_name = env_name
         self.render = render
-        self.env = gym.make(self.env_name)
+        import json
+        with open("/home/melikozcelik/rl-projects/rainbow_gym/rainbow/config-speed.json", "rb") as jsn:
+            config = json.load(jsn)
+        self.env = gym.make(self.env_name, config=config)
         self.state_size = np.prod(self.env.observation_space.shape)
         self.action_size = self.env.action_space.n
 
@@ -109,6 +114,7 @@ class Trainer:
                     #     # print("Best avg achieved, saving model...")
                     #     self.best_avg = avg
                     #     self.agent.save_model(self.env_name)
+                    self.agent.save_model(env_name=self.env_name, checkpoint="recent")
                     break
         self.agent.save_model(env_name=self.env_name, checkpoint="latest")
 
@@ -120,8 +126,8 @@ class Trainer:
 
 if __name__ == "__main__":
     trainer = Trainer(
-        env_name="CartPole-v0", render=False, episodes=500, batch_size=64, gamma=0.99, epsilon_start=1, epsilon_end=0.001, exploration_percentage=10, learning_rate=3e-4, 
-        fc_num=2, fc_neuron_nums=[128,128], tau=0.005, device="cpu")
+        env_name="highway-fast-v0", render=False, episodes=500, batch_size=64, gamma=0.99, epsilon_start=1, epsilon_end=0.001, exploration_percentage=10, learning_rate=3e-4, 
+        fc_num=2, fc_neuron_nums=[512,512], tau=0.005, device="cpu")
     trainer.train()
 
         
