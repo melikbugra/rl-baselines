@@ -1,7 +1,7 @@
 import gym
 import numpy as np
 import torch
-from dqn.replay_memory import PrioritizedReplayMemory
+from dqn.replay_memory import ReplayMemory
 from neural_networks.mlp import MLP
 import torch.optim as optim
 import random
@@ -15,9 +15,9 @@ import pygame
 
 
 class DQNAgent:
-    def __init__(self, env: gym.Env, device: torch.device, episodes: int, learning_rate: float, gamma: float, 
-                 batch_size: int, epsilon_start: float, epsilon_end: float, exploration_percentage: float, 
-                 fc_num: int, fc_neuron_nums: list[int], alpha: float=0.2, beta: float=0.6):
+    def __init__(self, env: gym.Env, device: torch.device, episodes: int, learning_rate: float, 
+                 gamma: float, batch_size: int, epsilon_start: float, epsilon_end: float, exploration_percentage: float, 
+                 fc_num: int, fc_neuron_nums: list[int], v_min: float = 0.0, v_max: float = 200.0, atom_size: int = 51):
         self.env = env
         self.state_size = np.prod(self.env.observation_space.shape)
         self.action_size = self.env.action_space.n
@@ -30,20 +30,23 @@ class DQNAgent:
         self.epsilon_end = epsilon_end
         self.epsilon = epsilon_start
         self.epsilon_decay = (self.epsilon - self.epsilon_end)*100/(self.episodes*(exploration_percentage + 1))
-        
 
-        self.policy_net: MLP = MLP(input_neurons=self.state_size, fc_num=2, fc_neuron_nums=[128, 128], output_neurons=self.action_size).to(self.device)
-        self.target_net: MLP = MLP(input_neurons=self.state_size, fc_num=2, fc_neuron_nums=[128, 128], output_neurons=self.action_size).to(self.device)
+        # Categorical related
+        self.v_min = v_min
+        self.v_max = v_max
+        self.atom_size = atom_size
+        self.support = torch.linspace(
+            self.v_min, self.v_max, self.atom_size
+        ).to(self.device)
+
+        self.policy_net: MLP = MLP(input_neurons=self.state_size, fc_num=2, fc_neuron_nums=[128, 128], 
+                                   output_neurons=self.action_size, atom_size=atom_size, support=self.support).to(self.device)
+        self.target_net: MLP = MLP(input_neurons=self.state_size, fc_num=2, fc_neuron_nums=[128, 128], 
+                                   output_neurons=self.action_size, atom_size=atom_size, support=self.support).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
 
-        # PER related
-        self.alpha: float = alpha
-        self.beta: float = beta
-        self.beta_increase = (1 - self.beta)/(self.episodes)
-        self.prior_eps: float = 1e-6
-        self.memory = PrioritizedReplayMemory(self.state_size, 1, 10000, 64, self.alpha)
-
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=learning_rate, amsgrad=True)
+        self.memory = ReplayMemory(self.state_size, 1, 10000, self.batch_size)
 
         self.steps_done = 0
         self.episode_scores = []
@@ -68,13 +71,13 @@ class DQNAgent:
             return self.policy_net(state).max(1)[1].view(1, 1)
         
     def plot_scores(self, show_result=False):
-        plt.figure("PER DQN")
+        plt.figure("Categorical DQN")
         scores = torch.tensor(self.episode_scores, dtype=torch.float)
         if show_result:
-            plt.title('PER DQN Result')
+            plt.title('Categorical DQN Result')
         else:
             plt.clf()
-            plt.title('Training PER DQN...')
+            plt.title('Training Categorical DQN...')
         plt.xlabel('Episode')
         plt.ylabel('Score')
         plt.plot(scores.numpy(), color="blue")
@@ -86,32 +89,16 @@ class DQNAgent:
 
         plt.pause(0.001)  # pause a bit so that plots are updated
 
-    def adaptive_e_greedy_and_beta(self):
+    def adaptive_e_greedy(self):
         if self.epsilon > self.epsilon_end + 0.00001:
             self.epsilon -= self.epsilon_decay
         if self.epsilon < self.epsilon_end:
             self.epsilon = self.epsilon_end
 
-        # PER: increase beta
-        if self.beta < 1:
-            self.beta += self.beta_increase
-        if self.beta > 1:
-            self.beta = 1
-
-        print(self.beta)
-
     def optimize_model(self):
         if len(self.memory) < self.batch_size:
             return
-        
-        # PER
-        transitions, weights, indices = self.memory.sample(self.beta)
-
-        weights = torch.FloatTensor(
-            weights.reshape(-1, 1)
-        ).to(self.device)
-
-
+        transitions: Transition = self.memory.sample()
         state_batch = transitions.state[0].squeeze(1)
         next_state_batch = transitions.next_state[0].squeeze(1)
         action_batch = transitions.action[0].squeeze(1)
@@ -120,27 +107,41 @@ class DQNAgent:
 
         mask = 1 - done_batch
 
-        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-        # columns of actions taken. These are the actions which would've been taken
-        # for each batch state according to policy_net
-        state_action_values = self.policy_net(state_batch).gather(1, action_batch)
+        # Categorical DQN algorithm
+        delta_z = float(self.v_max - self.v_min) / (self.atom_size - 1)
 
-        # Compute V(s_{t+1}) for all next states.
-        # Expected values of actions for non_final_next_states are computed based
-        # on the "older" target_net; selecting their best reward with max(1)[0].
-        # This is merged based on the mask, such that we'll have either the expected
-        # state value or 0 in case the state was final.
-        next_state_values = torch.zeros(self.batch_size, device=self.device)
         with torch.no_grad():
-            next_state_values = self.target_net(next_state_batch).max(1)[0]
-        # Compute the expected Q values
-        expected_state_action_values = (next_state_values * self.gamma * mask.squeeze(1)) + reward_batch.squeeze(1)
+            next_action = self.target_net(next_state_batch).max(1)[1]
+            next_dist = self.target_net.dist(next_state_batch)
+            next_dist = next_dist[range(self.batch_size), next_action]
 
-        # Compute Huber loss
-        criterion = nn.SmoothL1Loss(reduction="none")
-        # PER
-        elementwise_loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
-        loss = torch.mean(elementwise_loss * weights)
+            t_z = reward_batch + mask * self.gamma * self.support
+            t_z = t_z.clamp(min=self.v_min, max=self.v_max)
+            b = (t_z - self.v_min) / delta_z
+            l = b.floor().long()
+            u = b.ceil().long()
+
+            offset = (
+                torch.linspace(
+                    0, (self.batch_size - 1) * self.atom_size, self.batch_size
+                ).long()
+                .unsqueeze(1)
+                .expand(self.batch_size, self.atom_size)
+                .to(self.device)
+            )
+
+            proj_dist = torch.zeros(next_dist.size(), device=self.device)
+            proj_dist.view(-1).index_add_(
+                0, (l + offset).view(-1), (next_dist * (u.float() - b)).view(-1)
+            )
+            proj_dist.view(-1).index_add_(
+                0, (u + offset).view(-1), (next_dist * (b - l.float())).view(-1)
+            )
+
+        dist = self.policy_net.dist(state_batch)
+        log_p = torch.log(dist[range(self.batch_size), action_batch])
+
+        loss = -(proj_dist * log_p).sum(1).mean()
 
         # Optimize the model
         self.optimizer.zero_grad()
@@ -148,11 +149,6 @@ class DQNAgent:
         # In-place gradient clipping
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
-
-        # PER: update priorities
-        loss_for_prior = elementwise_loss.detach().cpu().numpy()
-        new_priorities = loss_for_prior + self.prior_eps
-        self.memory.update_priorities(indices, new_priorities)
 
     def save_model(self, env_name: str, checkpoint = ""):
         torch.save(self.policy_net.state_dict(), f"dqn/{env_name}_{checkpoint}.ckpt")
