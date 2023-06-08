@@ -130,6 +130,8 @@ class DQNAgent:
         loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
 
         if self.use_n_step:
+            gamma = self.gamma ** self.n_step
+            
             transitions = self.memory_n.sample_batch_from_idxs(indices)
             state_batch = transitions.state[0].squeeze(1)
             next_state_batch = transitions.next_state[0].squeeze(1)
@@ -138,8 +140,6 @@ class DQNAgent:
             done_batch = transitions.done.squeeze(1).int()
 
             mask = 1 - done_batch
-
-            gamma = self.gamma ** self.n_step
 
             state_action_values = self.policy_net(state_batch).gather(1, action_batch)
 
