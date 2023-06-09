@@ -135,10 +135,10 @@ class DQNAgent:
             weights.reshape(-1, 1)
         ).to(self.device)
 
-        state_batch = transitions.state[0].squeeze(1)
-        next_state_batch = transitions.next_state[0].squeeze(1)
-        action_batch = transitions.action[0].squeeze(1)
-        reward_batch = transitions.reward[0].squeeze(1)
+        state_batch = transitions.state.squeeze(1)
+        next_state_batch = transitions.next_state.squeeze(1)
+        action_batch = transitions.action.squeeze(1)
+        reward_batch = transitions.reward.squeeze(1)
         done_batch = transitions.done.squeeze(1).int()
 
         mask = 1 - done_batch
@@ -156,10 +156,10 @@ class DQNAgent:
             gamma = self.gamma ** self.n_step
 
             transitions = self.memory_n.sample_batch_from_idxs(indices)
-            state_batch = transitions.state[0].squeeze(1)
-            next_state_batch = transitions.next_state[0].squeeze(1)
-            action_batch = transitions.action[0].squeeze(1)
-            reward_batch = transitions.reward[0].squeeze(1)
+            state_batch = transitions.state.squeeze(1)
+            next_state_batch = transitions.next_state.squeeze(1)
+            action_batch = transitions.action.squeeze(1)
+            reward_batch = transitions.reward.squeeze(1)
             done_batch = transitions.done.squeeze(1).int()
 
             mask = 1 - done_batch

@@ -52,10 +52,10 @@ class ReplayMemory:
 
     def sample(self) -> Dict[str, np.ndarray]:
         idxs = np.random.choice(self.size, size=self.batch_size, replace=False)
-        state=self.state_buffer[idxs],
-        action=self.action_buffer[idxs],
-        next_state=self.next_state_buffer[idxs],
-        reward=self.reward_buffer[idxs],
+        state=self.state_buffer[idxs]
+        action=self.action_buffer[idxs]
+        next_state=self.next_state_buffer[idxs]
+        reward=self.reward_buffer[idxs]
         done=self.done_buffer[idxs]
         batch = Transition(state=state,
                             action=action,
@@ -68,10 +68,10 @@ class ReplayMemory:
     def sample_batch_from_idxs(
         self, indices: np.ndarray
     ) -> Dict[str, np.ndarray]:
-        state=self.state_buffer[indices],
-        action=self.action_buffer[indices],
-        next_state=self.next_state_buffer[indices],
-        reward=self.reward_buffer[indices],
+        state=self.state_buffer[indices]
+        action=self.action_buffer[indices]
+        next_state=self.next_state_buffer[indices]
+        reward=self.reward_buffer[indices]
         done=self.done_buffer[indices]
         batch = Transition(state=state,
                             action=action,
@@ -150,10 +150,10 @@ class PrioritizedReplayMemory(ReplayMemory):
         
         indices = self._sample_proportional()
         
-        state=self.state_buffer[indices],
-        action=self.action_buffer[indices],
-        next_state=self.next_state_buffer[indices],
-        reward=self.reward_buffer[indices],
+        state=self.state_buffer[indices]
+        action=self.action_buffer[indices]
+        next_state=self.next_state_buffer[indices]
+        reward=self.reward_buffer[indices]
         done=self.done_buffer[indices]
         batch = Transition(state=state,
                             action=action,

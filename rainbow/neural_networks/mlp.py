@@ -30,7 +30,7 @@ class MLP(nn.Module):
 
         for i in range(1, fc_num):
             self.value_layer.append(NoisyLinear(self.layer_neuron_nums[i], self.layer_neuron_nums[i+1]))
-        self.value_layer.append(NoisyLinear(self.layer_neuron_nums[-2], atom_size))
+        self.value_layer.append(NoisyLinear(self.layer_neuron_nums[-1], atom_size))
 
     def forward(self, state):
         x = state
