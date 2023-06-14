@@ -104,7 +104,7 @@ class Trainer:
                     self.agent.episode_scores.append(score)
                     self.agent.plot_scores()
                     avg = np.mean(self.agent.episode_scores[-100:])
-                    print(f"Episode: {episode},\tScore: {score},\tMean of last 100: {avg},\tEpsilon: {self.agent.epsilon}")
+                    print(f"Episode: {episode},\tScore: {score},\tMean of last 100: {avg}")
                     # if avg >= self.best_avg:
                     #     # print("Best avg achieved, saving model...")
                     #     self.best_avg = avg
@@ -120,7 +120,7 @@ class Trainer:
 
 if __name__ == "__main__":
     trainer = Trainer(
-        env_name="CartPole-v0", render=False, episodes=500, batch_size=64, gamma=0.99, epsilon_start=1, epsilon_end=0.001, exploration_percentage=10, learning_rate=3e-4, 
+        env_name="LunarLander-v2", render=False, episodes=500, batch_size=64, gamma=0.99, epsilon_start=1, epsilon_end=0.001, exploration_percentage=10, learning_rate=3e-4, 
         fc_num=2, fc_neuron_nums=[128,128], tau=0.005, device="cpu")
     trainer.train()
 

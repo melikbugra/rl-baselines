@@ -11,12 +11,12 @@ Transition = namedtuple('Transition',
 class ReplayMemory:
     """A simple numpy replay bufferfer."""
 
-    def __init__(self, state_dim: int, action_dim: int, size: int, batch_size: int = 32, n_step: int = 5, gamma: float = 0.99):
-        self.state_buffer = torch.zeros([size, 1, state_dim], dtype=torch.float32)
-        self.next_state_buffer = torch.zeros([size, 1, state_dim], dtype=torch.float32)
-        self.action_buffer = torch.zeros([size, 1, action_dim], dtype=torch.int64)
-        self.reward_buffer = torch.zeros([size, 1, 1], dtype=torch.float32)
-        self.done_buffer = torch.zeros([size, 1, 1], dtype=torch.bool)
+    def __init__(self, state_dim: int, action_dim: int, size: int, batch_size: int = 32, n_step: int = 5, gamma: float = 0.99, device="cpu"):
+        self.state_buffer = torch.zeros([size, 1, state_dim], dtype=torch.float32, device=device)
+        self.next_state_buffer = torch.zeros([size, 1, state_dim], dtype=torch.float32, device=device)
+        self.action_buffer = torch.zeros([size, 1, action_dim], dtype=torch.int64, device=device)
+        self.reward_buffer = torch.zeros([size, 1, 1], dtype=torch.float32, device=device)
+        self.done_buffer = torch.zeros([size, 1, 1], dtype=torch.bool, device=device)
         self.max_size, self.batch_size = size, batch_size
         self.ptr, self.size, = 0, 0
 
@@ -116,11 +116,11 @@ class PrioritizedReplayMemory(ReplayMemory):
         
     """
     
-    def __init__(self, state_dim: int, action_dim: int, size: int, batch_size: int, alpha: float):
+    def __init__(self, state_dim: int, action_dim: int, size: int, batch_size: int, alpha: float, device="cpu"):
         """Initialization."""
         assert alpha >= 0
         
-        super().__init__(state_dim, action_dim, size, batch_size)
+        super().__init__(state_dim, action_dim, size, batch_size, device=device)
         self.max_priority, self.tree_ptr = 1.0, 0
         self.alpha = alpha
         

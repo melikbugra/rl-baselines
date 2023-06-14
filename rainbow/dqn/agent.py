@@ -46,7 +46,7 @@ class DQNAgent:
         self.beta: float = beta
         self.beta_increase = (1 - self.beta)/(self.episodes)
         self.prior_eps: float = 1e-6
-        self.memory = PrioritizedReplayMemory(self.state_size, 1, 10000, 64, self.alpha)
+        self.memory = PrioritizedReplayMemory(self.state_size, 1, 10000, 64, self.alpha, device=device)
 
         # N-Step
         # memory for N-step Learning
@@ -54,7 +54,7 @@ class DQNAgent:
         if self.use_n_step:
             self.n_step = n_step
             self.memory_n = ReplayMemory(
-                self.state_size, 1, 10000, self.batch_size, n_step=n_step, gamma=gamma
+                self.state_size, 1, 10000, self.batch_size, n_step=n_step, gamma=gamma, device=device
             )
 
         # Categorical related
