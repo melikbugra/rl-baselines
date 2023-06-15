@@ -14,7 +14,7 @@ class MLP(nn.Module):
         self.support = support
         self.output_neurons = output_neurons
         
-        self.layer_neuron_nums = [input_neurons] + fc_neuron_nums + [output_neurons*atom_size] # Noisy
+        self.layer_neuron_nums = [input_neurons] + fc_neuron_nums + [output_neurons*atom_size]
         
         self.fc_list = nn.ModuleList()
 
