@@ -1,26 +1,18 @@
 import gym
-import math
-import matplotlib
 import matplotlib.pyplot as plt
 from itertools import count
 import numpy as np
 
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
 
-from collections import deque
-
-from ddpg.replay_memory import Transition
-from ddpg.agent import DDPGAgent
+from ppo.replay_memory import Transition
+from ppo.agent import PPOAgent
 
 
 
 class Trainer:
     def __init__(self, env_name: str, render: bool, episodes: int, batch_size: int, 
-                 gamma: float,
-                 alpha: float, beta: float, fc_neuron_nums: list[int], tau: float = 0.005, device: str = "cpu") -> None:
+                 alpha: float, gamma: float, policy_clip: float, fc_neuron_nums: list[int], n_epochs: int, gae_lambda: float, device: str = "cpu") -> None:
 
         self.env_name = env_name
         self.render = render
@@ -31,40 +23,41 @@ class Trainer:
 
         self.episodes = episodes
         self.batch_size = batch_size
-        self.gamma = gamma
-        self.tau = tau
+        self.gae_lambda = gae_lambda
         self.alpha = alpha
-        self.beta = beta
+        self.gamma = gamma
         self.fc_neuron_nums = fc_neuron_nums
+        self.n_epochs = n_epochs
         
-        self.agent = DDPGAgent(env=self.env, device=self.device, episodes=self.episodes, 
-                              alpha=self.alpha, beta=self.beta, gamma=self.gamma, batch_size=self.batch_size, tau=tau,
-                              fc_neuron_nums=fc_neuron_nums)
+        self.agent = PPOAgent(env=self.env, device=self.device, episodes=self.episodes, policy_clip=policy_clip,
+                              alpha=self.alpha, gamma=self.gamma, batch_size=self.batch_size, gae_lambda=gae_lambda,
+                              fc_neuron_nums=fc_neuron_nums, n_epochs=self.n_epochs)
 
     def train(self, trial_num = -1):
         self.best_avg = -float('inf')
+        n_steps = 0
         for episode in range(self.episodes):
             # Initialize the environment and get it's state
             state = self.env.reset()
             state = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0).view(1, -1)
             score = 0
-            self.agent.noise.reset()
-            for t in count():
-                if episode > 100:
+            done = False
+            while not done:
+                if episode > 1000:
                     self.env.render()
-                action = self.agent.select_action(state)
+                action, prob, value = self.agent.select_action(state)
                 next_state, reward, done , _ = self.env.step(action)
+                n_steps += 1
                 score += reward
                 reward = torch.tensor([reward], device=self.device)
                 next_state = torch.tensor(next_state, dtype=torch.float32, device=self.device).unsqueeze(0).view(1, -1)
 
-                self.agent.remember(state=state, action=torch.tensor(np.array([action]), device=self.device, dtype=torch.float32), next_state=next_state, reward=reward, done=done)
+                self.agent.remember(state=state, action=action, prob=prob, value=value, reward=reward, done=done)
 
-                self.agent.optimize_model()
+                if n_steps % self.agent.memory.max_size == 0:
+                    self.agent.optimize_model()
 
                 state = next_state
-
-                self.agent.update_network_parameters()
                 
                 if done:
                     self.agent.episode_scores.append(score)
@@ -86,8 +79,8 @@ class Trainer:
 
 if __name__ == "__main__":
     trainer = Trainer(
-        env_name="BipedalWalker-v3", render=True, episodes=1000, batch_size=64, gamma=0.99, 
-        alpha=1e-4, beta=1e-3, fc_neuron_nums=[512,512], device="cuda:0")
+        env_name="CartPole-v0", render=True, episodes=1000, batch_size=5,
+        alpha=3e-4, gamma=0.99, policy_clip=0.2, fc_neuron_nums=[256,256], device="cpu", n_epochs=5, gae_lambda=0.95)
     trainer.train()
 
         
