@@ -7,3 +7,4 @@ trainer = Trainer(
 trainer.agent.actor.load_state_dict(torch.load(f"trained_models/CartPole-v0_actor.ckpt"))
 trainer.agent.critic.load_state_dict(torch.load(f"trained_models/CartPole-v0_critic.ckpt"))
 trainer.agent.evaluate(trainer.env_name, 10)
+trainer.agent.actor.salien
