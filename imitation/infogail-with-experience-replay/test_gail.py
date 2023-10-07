@@ -10,7 +10,7 @@ import json
 import numpy as np
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Tests the trained agents on highway_env.',
+    parser = argparse.ArgumentParser(description='Tests the trained agents on y_env.',
                                      usage='python test_gail.py --episodes <int episodes>')
     parser.add_argument("--episodes", type=int, required=False, help="Specify the episode number (default=1).", default=10)
     parser.add_argument("--cluster", type=int, required=False, help="Specify the cluster (default=1).", default=1)

@@ -8,7 +8,12 @@ import torch
 from ppo.replay_memory import Transition
 from ppo.agent import PPOAgent
 
+import highway_env
 
+import warnings
+
+# Ignore all warnings
+warnings.filterwarnings('ignore')
 
 class Trainer:
     def __init__(self, env_name: str, render: bool, episodes: int, batch_size: int, 
@@ -43,7 +48,7 @@ class Trainer:
             score = 0
             done = False
             while not done:
-                if episode > 1000:
+                if episode > 500:
                     self.env.render()
                 action, prob, value = self.agent.select_action(state)
                 next_state, reward, done , _ = self.env.step(action)
@@ -64,10 +69,10 @@ class Trainer:
                     self.agent.plot_scores()
                     avg = np.mean(self.agent.episode_scores[-100:])
                     print(f"Episode: {episode},\tScore: {score},\tMean of last 100: {avg}")
-                    # if avg >= self.best_avg:
-                    #     # print("Best avg achieved, saving model...")
-                    #     self.best_avg = avg
-                    #     self.agent.save_model(self.env_name)
+                    if avg >= self.best_avg:
+                        # print("Best avg achieved, saving model...")
+                        self.best_avg = avg
+                        self.agent.save_model(self.env_name)
                     break
         self.agent.save_model(env_name=self.env_name, checkpoint="latest")
 
@@ -79,8 +84,8 @@ class Trainer:
 
 if __name__ == "__main__":
     trainer = Trainer(
-        env_name="CartPole-v0", render=True, episodes=1000, batch_size=5,
-        alpha=3e-4, gamma=0.99, policy_clip=0.2, fc_neuron_nums=[256,256], device="cpu", n_epochs=5, gae_lambda=0.95)
+        env_name="CartPole-v0", render=True, episodes=2000, batch_size=5,
+        alpha=3e-4, gamma=0.99, policy_clip=0.2, fc_neuron_nums=[128,128], device="cpu", n_epochs=4, gae_lambda=0.95)
     trainer.train()
 
         

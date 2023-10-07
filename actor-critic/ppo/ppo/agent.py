@@ -28,9 +28,9 @@ class PPOAgent:
         self.actor: Actor = Actor(input_neurons=self.state_size, fc_neuron_nums=fc_neuron_nums, output_neurons=self.action_size).to(self.device)
         self.critic: Critic = Critic(input_neurons=self.state_size, fc_neuron_nums=fc_neuron_nums).to(self.device)
 
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=alpha)
-        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=alpha)
-        self.memory = ReplayMemory(self.state_size, 1, size=20, batch_size=self.batch_size, device=self.device)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=alpha, amsgrad=True)
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=alpha, amsgrad=True)
+        self.memory = ReplayMemory(self.state_size, 1, size=self.batch_size*4, batch_size=self.batch_size, device=self.device)
 
         self.steps_done = 0
         self.episode_scores = []
@@ -135,42 +135,38 @@ class PPOAgent:
                 self.actor_optimizer.zero_grad()
                 self.critic_optimizer.zero_grad()
                 total_loss.backward()
-                # torch.nn.utils.clip_grad_value_(self.actor.parameters(), 100)
-                # torch.nn.utils.clip_grad_value_(self.critic.parameters(), 100)
+                torch.nn.utils.clip_grad_value_(self.actor.parameters(), 100)
+                torch.nn.utils.clip_grad_value_(self.critic.parameters(), 100)
                 self.actor_optimizer.step()
                 self.critic_optimizer.step()
 
         self.memory.clear()
 
 
-    # def evaluate(self, env_name: str, episodes: int):
-    #     env = gym.make(env_name)
-    #     scores = []
-    #     for episode in range(episodes):
-    #         state, info = env.reset()
-    #         state = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0).view(1, -1)
-    #         score = 0
+    def evaluate(self, env_name: str, episodes: int):
+        env: gym.Env = gym.make(env_name)
+        scores = []
+        for episode in range(episodes):
+            state = env.reset()
+            state = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0).view(1, -1)
+            score = 0
 
-    #         while True:
-    #             env.render()
+            while True:
+                env.render()
                 
-    #             action = self.select_greedy_action(state)
-    #             observation, reward, terminated, truncated, _ = env.step(action.item())
-    #             score += reward
-    #             reward = torch.tensor([reward], device=self.device)
-    #             done = terminated or truncated
+                action, prob, value = self.select_action(state)
+                next_state, reward, done , _ = env.step(action)
+                score += reward
+                reward = torch.tensor([reward], device=self.device)
+                next_state = torch.tensor(next_state, dtype=torch.float32, device=self.device).unsqueeze(0).view(1, -1)
 
-    #             if terminated:
-    #                 next_state = None
-    #             else:
-    #                 next_state = torch.tensor(observation, dtype=torch.float32, device=self.device).unsqueeze(0).view(1, -1)
+                # Move to the next state
+                state = next_state
 
-    #             # Move to the next state
-    #             state = next_state
+                if done:
+                    scores.append(score)
+                    print(f"Episode score: {score}")
+                    break
 
-    #             if done:
-    #                 scores.append(score)
-    #                 # print(f"Episode score: {score}")
-    #                 break
-
-    #     return np.mean(scores)
+        return np.mean(scores)
+    
