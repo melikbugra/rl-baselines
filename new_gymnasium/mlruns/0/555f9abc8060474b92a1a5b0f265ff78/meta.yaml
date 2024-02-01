@@ -1,0 +1,15 @@
+artifact_uri: file:///home/melikozcelik/rl-projects/rl-base-lines_gymnasium/rl-baselines/new_gymnasium/mlruns/0/555f9abc8060474b92a1a5b0f265ff78/artifacts
+end_time: 1706825363451
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 555f9abc8060474b92a1a5b0f265ff78
+run_name: resilient-moth-813
+run_uuid: 555f9abc8060474b92a1a5b0f265ff78
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1706825361411
+status: 3
+tags: []
+user_id: melikozcelik

@@ -1,21 +1,24 @@
+from abc import ABC, abstractmethod
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.optim as optim
 from gymnasium import Env
 from torch import Tensor
 
-from utils.base_classes import BaseExperienceReplay, BaseNeuralNetwork
+from utils.base_classes.base_experience_replay import BaseExperienceReplay
+from utils.base_classes.base_neural_network import BaseNeuralNetwork
+from utils.base_classes.base_writer import BaseWriter
 
 
-class BaseAgent:
+class BaseAgent(ABC):
     def __init__(
         self,
         env: Env,
         neural_network: BaseNeuralNetwork,
         experience_replay: BaseExperienceReplay,
+        writer: BaseWriter,
         learning_rate: float = 3e-4,
         device: str = "cpu",
     ) -> None:
@@ -31,10 +34,10 @@ class BaseAgent:
         self.action_num: int = neural_network.action_num
 
         self.steps_done: int = 0
-        self.episode_scores: list[float] = []
 
         self.models_folder: Path = Path("./models")
 
+    @abstractmethod
     def select_action(self, state: Tensor) -> Tensor:
         """Selects an action under exploration strategy
 
@@ -43,7 +46,7 @@ class BaseAgent:
         :return: Chosen action as a tensor
         :rtype: Tensor
         """
-        raise NotImplementedError()
+        pass
 
     def select_random_action(self) -> Tensor:
         """Selects a random action
@@ -64,6 +67,7 @@ class BaseAgent:
                 dtype=torch.long,
             ).squeeze()
 
+    @abstractmethod
     def select_greedy_action(self, state: Tensor) -> Tensor:
         """Selects an action under exploitation strategy
 
@@ -72,8 +76,9 @@ class BaseAgent:
         :return: Chosen action as a tensor
         :rtype: Tensor
         """
-        raise NotImplementedError()
+        pass
 
+    @abstractmethod
     def decode_gym_action(self, nn_action_values: Tensor) -> list:
         """Action values as output of a neural network
 
@@ -82,41 +87,17 @@ class BaseAgent:
         :return: Actions list
         :rtype: list
         """
-        raise NotImplementedError()
+        pass
 
-    def plot_scores(self, algo_name: str, show_result=False) -> None:
-        """Plot scores with an running average
-
-        :param algo_name: Algorithm name
-        :type algo_name: str
-        :param show_result: Is this the result plot?, defaults to False
-        :type show_result: bool, optional
-        """
-        plt.figure(f"{algo_name}")
-        scores = torch.tensor(self.episode_scores, dtype=torch.float)
-        if show_result:
-            plt.title(f"{algo_name} Result")
-        else:
-            plt.clf()
-            plt.title(f"Training {algo_name}...")
-        plt.xlabel("Episode")
-        plt.ylabel("Score")
-        plt.plot(scores.numpy(), color="blue")
-        # Take 100 episode averages and plot them too
-        if len(scores) >= 100:
-            means = scores.unfold(0, 100, 1).mean(1).view(-1)
-            means = torch.cat((torch.zeros(99), means))
-            plt.plot(means.numpy(), color="red")
-
-        plt.pause(0.001)  # pause a bit so that plots are updated
-
+    @abstractmethod
     def optimize_model(self) -> None:
         """Optimize the model of the agent"""
-        raise NotImplementedError()
+        pass
 
-    def get_transitions(self) -> tuple(Tensor):
+    @abstractmethod
+    def get_transitions(self) -> tuple[Tensor]:
         """Returns the transitions"""
-        raise NotImplementedError()
+        pass
 
     def compute_loss(
         self,
@@ -139,14 +120,20 @@ class BaseAgent:
         :param mask_batch: Mask batch obtained from the done batch of Transition namedtuple
         :type mask_batch: Tensor
         """
-        raise NotImplementedError()
+        pass
 
+    def compute_losses(self):
+        """In the future this method will be used by GAN based algorithms that have multiple losses"""
+        pass
+
+    @abstractmethod
     def update_parameters(self, total_loss: Tensor) -> None:
         """Update the parameters by back propagating
 
         :param total_loss: Total loss tensor
         :type total_loss: Tensor
         """
+        pass
 
     def save_model(self, model: BaseNeuralNetwork, env_name: str, checkpoint=""):
         save_path = self.models_folder / f"{env_name}_{checkpoint}"

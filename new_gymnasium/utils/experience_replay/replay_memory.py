@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from utils.base_classes import BaseExperienceReplay, Transition
+from utils.base_classes.base_experience_replay import BaseExperienceReplay, Transition
 
 
 class ReplayMemory(BaseExperienceReplay):

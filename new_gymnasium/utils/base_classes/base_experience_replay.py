@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from typing import NamedTuple
 
 from torch import Tensor
@@ -11,16 +12,18 @@ class Transition(NamedTuple):
     done: Tensor
 
 
-class BaseExperienceReplay:
+class BaseExperienceReplay(ABC):
     def __init__(self) -> None:
         self.size: int = 0
         self.batch_size: int
 
+    @abstractmethod
     def push(self, transition: Transition):
-        raise NotImplementedError()
+        pass
 
+    @abstractmethod
     def sample(self) -> Transition:
-        raise NotImplementedError()
+        pass
 
     def __len__(self) -> int:
         return self.size

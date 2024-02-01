@@ -1,0 +1,15 @@
+artifact_uri: file:///home/melikozcelik/rl-projects/rl-base-lines_gymnasium/rl-baselines/new_gymnasium/mlruns/0/8aa1c7f5aa814cd385630edc88de73a7/artifacts
+end_time: 1706825421531
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 8aa1c7f5aa814cd385630edc88de73a7
+run_name: secretive-bee-470
+run_uuid: 8aa1c7f5aa814cd385630edc88de73a7
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1706825407667
+status: 3
+tags: []
+user_id: melikozcelik

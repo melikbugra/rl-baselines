@@ -1,4 +1,5 @@
 from copy import deepcopy
+
 from gymnasium import Env
 import numpy as np
 import random
@@ -13,20 +14,23 @@ from utils.base_classes import (
     BaseNeuralNetwork,
     Transition,
 )
+from value_based.dqn.vanilla_dqn.dqn_writer import DQNWriter
 
 
 class VanillaDQNAgent(BaseAgent):
     def __init__(
         self,
         env: Env,
-        episodes: int,
+        time_steps: int,
         epsilon_start: float,
         epsilon_end: float,
         exploration_percentage: float,
         gamma: float,
+        tau: float,
         # base agent attributes
         neural_network: BaseNeuralNetwork,
         experience_replay: BaseExperienceReplay,
+        writer: DQNWriter,
         learning_rate: float = None,
         device: str = None,
     ) -> None:
@@ -34,24 +38,30 @@ class VanillaDQNAgent(BaseAgent):
             env=env,
             neural_network=neural_network,
             experience_replay=experience_replay,
+            writer=writer,
             learning_rate=learning_rate,
             device=device,
         )
+
+        self.writer: DQNWriter = writer
 
         self.epsilon_end: float = epsilon_end
         self.epsilon: float = epsilon_start
         self.epsilon_decay: float = (
             (self.epsilon - self.epsilon_end)
             * 100
-            / (episodes * (exploration_percentage + 1))
+            / (time_steps * (exploration_percentage + 1))
         )
 
         self.gamma: float = gamma
+        self.tau: float = tau
 
         self.policy_net: BaseNeuralNetwork = neural_network
         self.target_net: BaseNeuralNetwork = deepcopy(neural_network)
 
     def select_action(self, state: Tensor) -> Tensor:
+        self.adaptive_e_greedy()
+
         sample = random.uniform(0, 1)
         self.steps_done += 1
         if sample > self.epsilon:
@@ -87,6 +97,7 @@ class VanillaDQNAgent(BaseAgent):
         return decoded_batch_actions
 
     def adaptive_e_greedy(self):
+        self.writer.epsilon = self.epsilon
         if self.epsilon > self.epsilon_end + 1e-10:
             self.epsilon -= self.epsilon_decay
         if self.epsilon < self.epsilon_end:
@@ -95,6 +106,7 @@ class VanillaDQNAgent(BaseAgent):
     def optimize_model(self):
         if len(self.experience_replay) < self.experience_replay.batch_size:
             return
+
         transitions = self.get_transitions()
 
         total_loss = self.compute_loss(*transitions)
@@ -126,7 +138,7 @@ class VanillaDQNAgent(BaseAgent):
         action_batch: Tensor,
         reward_batch: Tensor,
         mask_batch: Tensor,
-    ):
+    ) -> Tensor:
         total_loss: Tensor = 0
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
@@ -152,6 +164,8 @@ class VanillaDQNAgent(BaseAgent):
                 state_action_values, expected_state_action_values.unsqueeze(1)
             )
 
+        self.writer.losses.append(total_loss.item())
+
         return total_loss
 
     def update_parameters(self, total_loss: Tensor):
@@ -160,3 +174,11 @@ class VanillaDQNAgent(BaseAgent):
         # In-place gradient clipping
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
+
+        target_net_state_dict = self.target_net.state_dict()
+        policy_net_state_dict = self.policy_net.state_dict()
+        for key in policy_net_state_dict:
+            target_net_state_dict[key] = policy_net_state_dict[
+                key
+            ] * self.tau + target_net_state_dict[key] * (1 - self.tau)
+        self.target_net.load_state_dict(target_net_state_dict)

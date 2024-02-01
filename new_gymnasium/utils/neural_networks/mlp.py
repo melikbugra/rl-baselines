@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-from utils.base_classes import BaseNeuralNetwork
+from utils.base_classes.base_neural_network import BaseNeuralNetwork
 
 
 class MLP(BaseNeuralNetwork):
