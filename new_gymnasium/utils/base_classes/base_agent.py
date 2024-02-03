@@ -24,6 +24,8 @@ class BaseAgent(ABC):
     ) -> None:
         self.env = env
         self.experience_replay: BaseExperienceReplay = experience_replay
+        self.writer: BaseWriter = writer
+
         self.device: str = device
 
         self.optimizer = optim.AdamW(
@@ -119,6 +121,8 @@ class BaseAgent(ABC):
         :type reward_batch: Tensor
         :param mask_batch: Mask batch obtained from the done batch of Transition namedtuple
         :type mask_batch: Tensor
+        :param time_step: Training time step
+        :type time_step: int
         """
         pass
 

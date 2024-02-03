@@ -1,22 +1,22 @@
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from datetime import datetime
 from typing import Iterator
 
 import gymnasium as gym
 from gymnasium import Env
 from gymnasium.spaces import Discrete, MultiDiscrete
+from gymnasium.wrappers import normalize
 import numpy as np
 import matplotlib.pyplot as plt
-import mlflow
 import torch
 
 from utils.base_classes.base_experience_replay import BaseExperienceReplay, Transition
 from utils.base_classes.base_neural_network import BaseNeuralNetwork
 from utils.base_classes.base_writer import BaseWriter
 from utils.base_classes.base_agent import BaseAgent
-from utils.neural_networks.mlp import MLP
 from utils.experience_replay.replay_memory import ReplayMemory
+from utils.neural_networks.mlp import MLP
+from utils.mlflow_logger.mlflow_logger import MLFlowLogger
 
 
 class BaseAlgorithm(ABC):
@@ -39,6 +39,7 @@ class BaseAlgorithm(ABC):
         writing_period: int = 500,
         mlflow_tracking_uri: str = None,
         algo_name: str = None,
+        normalize_observation: bool = False,
     ) -> None:
         self.env: Env = env
         self.time_steps: int = time_steps
@@ -53,6 +54,9 @@ class BaseAlgorithm(ABC):
         self.env_seed: int = env_seed
         self.plot_train_sores: bool = plot_train_sores
         self.writing_period: int = writing_period
+        self.normalize_observation: bool = normalize_observation
+        if normalize_observation:
+            self.env = normalize.NormalizeObservation(env)
 
         self.algo_name: str
 
@@ -61,27 +65,24 @@ class BaseAlgorithm(ABC):
 
         self.train_scores: list[float] = []
 
-        if mlflow_tracking_uri and algo_name:
-            self.mlflow_logging: bool = True
-            mlflow.set_tracking_uri(mlflow_tracking_uri)
-            experiment_name = f"{self.env.unwrapped.spec.id}_{self.algo_name.lower().replace(' ', '_')}"
-            mlflow.set_experiment(experiment_name)
-            run_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            with mlflow.start_run(run_name=run_name) as run:
-                mlflow.log_param("time_steps", time_steps)
-                mlflow.log_param("learning_rate", learning_rate)
-                mlflow.log_param("network_type", network_type)
-                mlflow.log_param(
-                    "network_arch", ",".join([str(x) for x in network_arch])
-                )
-                mlflow.log_param("experience_replay_size", experience_replay_size)
-                mlflow.log_param("batch_size", batch_size)
-                mlflow.log_param("batch_size", batch_size)
-                self.mlflow_run_id = run.info.run_id
+        self.mlflow_logger = MLFlowLogger(mlflow_tracking_uri)
 
-    def set_mlflow_run_id(self):
-        if self.mlflow_logging:
-            self.writer.mlflow_run_id = self.mlflow_run_id
+        if mlflow_tracking_uri and algo_name:
+            self.mlflow_logger.define_experiment_and_run(
+                params_to_log={
+                    "time_steps": time_steps,
+                    "learning_rate": learning_rate,
+                    "network_type": network_type,
+                    "network_arch": network_arch,
+                    "experience_replay_type": experience_replay_type,
+                    "experience_replay_size": experience_replay_size,
+                    "batch_size": batch_size,
+                    "device": device,
+                    "normalize_observation": normalize_observation,
+                },
+                env=env,
+                algo_name=algo_name,
+            )
 
     def make_network(self) -> BaseNeuralNetwork:
         """Returns the neural network
@@ -143,18 +144,18 @@ class BaseAlgorithm(ABC):
                 print(self.writer)
                 self.writer.reset(time_step + self.writing_period)
 
+        self.mlflow_logger.end_run()
+
         if self.plot_train_sores:
             self.plot_scores(show_result=True)
             plt.show()
 
     def evaluate(self, time_step: int):
         eval_env: Env = gym.make(self.env.spec.id)
+        if self.normalize_observation:
+            eval_env = normalize.NormalizeObservation(eval_env)
         state, _ = eval_env.reset(seed=self.env_seed)
-        state = (
-            torch.tensor(state, dtype=torch.float32, device=self.device)
-            .unsqueeze(0)
-            .view(1, -1)
-        )
+        state = self.state_to_torch(state)
 
         episode_score = 0
 
@@ -170,22 +171,17 @@ class BaseAlgorithm(ABC):
             if terminated:
                 next_state = None
             else:
-                next_state = (
-                    torch.tensor(observation, dtype=torch.float32, device=self.device)
-                    .unsqueeze(0)
-                    .view(1, -1)
-                )
+                next_state = self.state_to_torch(observation)
 
             done = terminated or truncated
 
             state = next_state
 
         self.writer.eval_score = episode_score
-        mlflow.log_metric(
+        self.mlflow_logger.log_metric(
             "Evaluation Score",
             episode_score,
             step=time_step,
-            run_id=self.mlflow_run_id,
         )
 
     def collect_data(self) -> Iterator[Transition]:
@@ -195,11 +191,7 @@ class BaseAlgorithm(ABC):
         :rtype: Iterator[iter[Transition]]
         """
         state, _ = self.env.reset(seed=self.env_seed)
-        state = (
-            torch.tensor(state, dtype=torch.float32, device=self.device)
-            .unsqueeze(0)
-            .view(1, -1)
-        )
+        state = self.state_to_torch(state)
 
         episode_score = 0
 
@@ -216,11 +208,7 @@ class BaseAlgorithm(ABC):
             if terminated:
                 next_state = None
             else:
-                next_state = (
-                    torch.tensor(observation, dtype=torch.float32, device=self.device)
-                    .unsqueeze(0)
-                    .view(1, -1)
-                )
+                next_state = self.state_to_torch(observation)
 
             done = terminated or truncated
 
@@ -239,24 +227,26 @@ class BaseAlgorithm(ABC):
             if done:
                 self.writer.train_scores.append(episode_score)
                 self.train_scores.append(episode_score)
-                mlflow.log_metric(
+                self.mlflow_logger.log_metric(
                     "Train Score",
                     episode_score,
                     step=time_step,
-                    run_id=self.mlflow_run_id,
                 )
 
                 if self.plot_train_sores:
                     self.plot_scores()
 
                 state, _ = self.env.reset(seed=self.env_seed)
-                state = (
-                    torch.tensor(state, dtype=torch.float32, device=self.device)
-                    .unsqueeze(0)
-                    .view(1, -1)
-                )
+                state = self.state_to_torch(state)
 
                 episode_score = 0
+
+    def state_to_torch(self, state: np.ndarray):
+        return (
+            torch.tensor(state, dtype=torch.float32, device=self.device)
+            .unsqueeze(0)
+            .view(1, -1)
+        )
 
     def plot_scores(self, show_result=False) -> None:
         """Plot scores with an running average

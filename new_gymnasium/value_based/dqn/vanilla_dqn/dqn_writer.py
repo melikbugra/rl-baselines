@@ -1,12 +1,19 @@
 import numpy as np
 import mlflow
 
-from utils.base_classes.base_writer import BaseWriter
+from utils.base_classes import BaseWriter
+from utils.mlflow_logger import MLFlowLogger
 
 
 class DQNWriter(BaseWriter):
-    def __init__(self, writing_period: int, time_steps: int) -> None:
-        super().__init__(writing_period=writing_period, time_steps=time_steps)
+    def __init__(
+        self, writing_period: int, time_steps: int, mlflow_logger: MLFlowLogger
+    ) -> None:
+        super().__init__(
+            writing_period=writing_period,
+            time_steps=time_steps,
+            mlflow_logger=mlflow_logger,
+        )
 
         self.table.field_names = [
             "Time Step",
@@ -27,11 +34,10 @@ class DQNWriter(BaseWriter):
     def calculate_averages(self):
         super().calculate_averages()
         self.avg_loss = np.mean(self.losses[-100:])
-        mlflow.log_metric(
+        self.mlflow_loger.log_metric(
             "Average Loss",
             self.avg_loss,
             step=self.time_step,
-            run_id=self.mlflow_run_id,
         )
 
     def add_row_to_table(self):

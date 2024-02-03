@@ -30,6 +30,7 @@ class VanillaDQN(BaseAlgorithm):
         plot_train_sores: bool = False,
         writing_period: int = 500,
         mlflow_tracking_uri: str = None,
+        normalize_observation: bool = False,
     ) -> None:
         self.algo_name = "Vanilla DQN"
         super().__init__(
@@ -48,12 +49,24 @@ class VanillaDQN(BaseAlgorithm):
             writing_period=writing_period,
             mlflow_tracking_uri=mlflow_tracking_uri,
             algo_name=self.algo_name,
+            normalize_observation=normalize_observation,
+        )
+
+        self.mlflow_logger.log_params(
+            {
+                "epsilon_start": epsilon_start,
+                "epsilon_end": epsilon_end,
+                "exploration_percentage": exploration_percentage,
+                "gamma": gamma,
+                "tau": tau,
+            }
         )
 
         self.writer: DQNWriter = DQNWriter(
-            writing_period=writing_period, time_steps=time_steps
+            writing_period=writing_period,
+            time_steps=time_steps,
+            mlflow_logger=self.mlflow_logger,
         )
-        self.set_mlflow_run_id()
 
         neural_network: BaseNeuralNetwork = self.make_network()
 

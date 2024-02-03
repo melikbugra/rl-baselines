@@ -3,9 +3,13 @@ from abc import ABC, abstractmethod
 import numpy as np
 from prettytable import PrettyTable
 
+from utils.mlflow_logger.mlflow_logger import MLFlowLogger
+
 
 class BaseWriter(ABC):
-    def __init__(self, writing_period: int, time_steps: int) -> None:
+    def __init__(
+        self, writing_period: int, time_steps: int, mlflow_logger: MLFlowLogger
+    ) -> None:
         super().__init__()
         self.table = PrettyTable()
 
@@ -17,7 +21,7 @@ class BaseWriter(ABC):
 
         self.avg_train_score: float = 0.0
 
-        self.mlflow_run_id: str = None
+        self.mlflow_loger: MLFlowLogger = mlflow_logger
 
     def __str__(self) -> str:
         self.calculate_averages()

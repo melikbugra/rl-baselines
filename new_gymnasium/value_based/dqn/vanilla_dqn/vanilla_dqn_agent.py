@@ -42,7 +42,6 @@ class VanillaDQNAgent(BaseAgent):
             learning_rate=learning_rate,
             device=device,
         )
-
         self.writer: DQNWriter = writer
 
         self.epsilon_end: float = epsilon_end
