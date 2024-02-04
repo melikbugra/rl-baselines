@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from copy import deepcopy
+from pathlib import Path
 from typing import Iterator
+import time
 
 import gymnasium as gym
 from gymnasium import Env
@@ -36,7 +38,7 @@ class BaseAlgorithm(ABC):
         device: str = "cpu",
         env_seed: int = 42,
         plot_train_sores: bool = False,
-        writing_period: int = 500,
+        writing_period: int = 10000,
         mlflow_tracking_uri: str = None,
         algo_name: str = None,
         normalize_observation: bool = False,
@@ -83,6 +85,9 @@ class BaseAlgorithm(ABC):
                 env=env,
                 algo_name=algo_name,
             )
+
+        self.start_time: float
+        self.models_folder: Path = Path("./models")
 
     def make_network(self) -> BaseNeuralNetwork:
         """Returns the neural network
@@ -136,11 +141,16 @@ class BaseAlgorithm(ABC):
 
     def train(self):
         """Train the agent"""
+        self.start_time = time.perf_counter()
+        best_avg_eval_score = -np.inf
         for time_step, transition in self.collect_data():
             self.agent.experience_replay.push(transition)
             self.agent.optimize_model()
             if time_step % self.writing_period == 0 and time_step != 0:
-                self.evaluate(time_step)
+                avg_eval_score = self.evaluate(time_step, episodes=10)
+                if avg_eval_score >= best_avg_eval_score:
+                    self.save(folder=self.models_folder, checkpoint="best_avg")
+                self.writer.time_elapsed = time.perf_counter() - self.start_time
                 print(self.writer)
                 self.writer.reset(time_step + self.writing_period)
 
@@ -150,39 +160,56 @@ class BaseAlgorithm(ABC):
             self.plot_scores(show_result=True)
             plt.show()
 
-    def evaluate(self, time_step: int):
-        eval_env: Env = gym.make(self.env.spec.id)
+    def evaluate(self, time_step: int = None, render: bool = False, episodes: int = 10):
+        if render:
+            eval_env: Env = gym.make(self.env.spec.id, render_mode="human")
+        else:
+            eval_env: Env = gym.make(self.env.spec.id)
         if self.normalize_observation:
             eval_env = normalize.NormalizeObservation(eval_env)
-        state, _ = eval_env.reset(seed=self.env_seed)
-        state = self.state_to_torch(state)
 
-        episode_score = 0
+        episode_scores = []
+        for _ in range(episodes):
+            state, _ = eval_env.reset(seed=self.env_seed)
+            state = self.state_to_torch(state)
 
-        done = False
-        while not done:
-            action = self.agent.select_greedy_action(state)
-            if self.agent.action_type == "discrete":
-                action = action.item()
-            observation, reward, terminated, truncated, _ = eval_env.step(action)
-            episode_score += reward
-            reward = torch.tensor([reward], device=self.device)
+            episode_score = 0
 
-            if terminated:
-                next_state = None
-            else:
-                next_state = self.state_to_torch(observation)
+            done = False
+            while not done:
+                if render:
+                    eval_env.render()
+                action = self.agent.select_greedy_action(state)
+                if self.agent.action_type == "discrete":
+                    action = action.item()
+                observation, reward, terminated, truncated, _ = eval_env.step(action)
+                episode_score += reward
+                reward = torch.tensor([reward], device=self.device)
 
-            done = terminated or truncated
+                if terminated:
+                    next_state = None
+                else:
+                    next_state = self.state_to_torch(observation)
 
-            state = next_state
+                done = terminated or truncated
 
-        self.writer.eval_score = episode_score
-        self.mlflow_logger.log_metric(
-            "Evaluation Score",
-            episode_score,
-            step=time_step,
-        )
+                state = next_state
+
+            episode_scores.append(episode_score)
+
+        average_score = np.mean(episode_scores)
+        if not render:
+            self.writer.avg_eval_score = average_score
+            self.mlflow_logger.log_metric(
+                "Average Evaluation Score",
+                average_score,
+                step=time_step,
+            )
+        else:
+            for episode_score in episode_scores:
+                print(f"Episode Score: {episode_score}")
+
+        return average_score
 
     def collect_data(self) -> Iterator[Transition]:
         """Collect data for training and yield for each time_step
@@ -271,3 +298,11 @@ class BaseAlgorithm(ABC):
             plt.plot(means.numpy(), color="red")
 
         plt.pause(0.001)  # pause a bit so that plots are updated
+
+    @abstractmethod
+    def save(self, folder: str, checkpoint=""):
+        pass
+
+    @abstractmethod
+    def load(self):
+        pass

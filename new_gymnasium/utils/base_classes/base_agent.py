@@ -37,8 +37,6 @@ class BaseAgent(ABC):
 
         self.steps_done: int = 0
 
-        self.models_folder: Path = Path("./models")
-
     @abstractmethod
     def select_action(self, state: Tensor) -> Tensor:
         """Selects an action under exploration strategy
@@ -138,8 +136,3 @@ class BaseAgent(ABC):
         :type total_loss: Tensor
         """
         pass
-
-    def save_model(self, model: BaseNeuralNetwork, env_name: str, checkpoint=""):
-        save_path = self.models_folder / f"{env_name}_{checkpoint}"
-        save_path = save_path.with_suffix(".ckpt")
-        torch.save(model.state_dict(), save_path)

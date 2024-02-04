@@ -20,7 +20,8 @@ class DQNWriter(BaseWriter):
             "Epsilon",
             "Average Loss",
             "Average Train Score",
-            "Evaluation Score",
+            "Average Evaluation Score",
+            "Time Elapsed (s)",
         ]
 
         self.losses: list[float] = []
@@ -47,6 +48,7 @@ class DQNWriter(BaseWriter):
                 f"{self.epsilon:.4f}",
                 f"{self.avg_loss:.4f}",
                 f"{self.avg_train_score:.2f}",
-                f"{self.eval_score:.2f}",
+                f"{self.avg_eval_score:.2f}",
+                f"{self.time_elapsed:.2f}",
             ]
         )

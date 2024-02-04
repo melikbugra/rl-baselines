@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from gymnasium import Env
+import torch
 
 from utils.base_classes import BaseAlgorithm, BaseNeuralNetwork
 from utils.experience_replay import ReplayMemory
@@ -28,7 +31,7 @@ class VanillaDQN(BaseAlgorithm):
         device: str = "cpu",
         env_seed: int = 42,
         plot_train_sores: bool = False,
-        writing_period: int = 500,
+        writing_period: int = 10000,
         mlflow_tracking_uri: str = None,
         normalize_observation: bool = False,
     ) -> None:
@@ -72,7 +75,7 @@ class VanillaDQN(BaseAlgorithm):
 
         experience_replay: ReplayMemory = self.make_experience_replay()
 
-        self.agent = VanillaDQNAgent(
+        self.agent: VanillaDQNAgent = VanillaDQNAgent(
             env=env,
             time_steps=time_steps,
             epsilon_start=epsilon_start,
@@ -86,3 +89,38 @@ class VanillaDQN(BaseAlgorithm):
             learning_rate=learning_rate,
             device=device,
         )
+
+    def save(self, folder: str, checkpoint=""):
+        env_name = self.env.spec.id
+        folder: Path = Path(folder)
+        save_path = folder / f"{env_name}_{self.device}_{checkpoint}"
+        save_path = save_path.with_suffix(".ckpt")
+        model_state = {
+            "state_dict": self.agent.policy_net.state_dict(),
+            "optimizer": self.agent.optimizer.state_dict(),
+            "network_arch": self.network_arch,
+            "network_type": self.network_type,
+            "checkpoint": checkpoint,
+            "device": self.device,
+            "normalize_observation": self.normalize_observation,
+        }
+        torch.save(model_state, save_path)
+
+    def load(self, model_path: str):
+        loaded_model = torch.load(model_path, map_location=self.device)
+
+        network_arch = loaded_model["network_arch"]
+        network_type = loaded_model["network_type"]
+        normalize_observation = loaded_model["normalize_observation"]
+        checkpoint = loaded_model["checkpoint"]
+        device = loaded_model["device"]
+
+        self.__init__(
+            self.env,
+            network_arch=network_arch,
+            network_type=network_type,
+            normalize_observation=normalize_observation,
+        )
+
+        self.agent.policy_net.load_state_dict(loaded_model["state_dict"])
+        self.agent.optimizer.load_state_dict(loaded_model["optimizer"])

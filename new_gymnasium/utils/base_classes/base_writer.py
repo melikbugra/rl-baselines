@@ -17,11 +17,13 @@ class BaseWriter(ABC):
         self.time_steps: int = time_steps
 
         self.train_scores: list[float] = []
-        self.eval_score: float = []
+        self.avg_eval_score: float = 0.0
 
         self.avg_train_score: float = 0.0
 
         self.mlflow_loger: MLFlowLogger = mlflow_logger
+
+        self.time_elapsed: float
 
     def __str__(self) -> str:
         self.calculate_averages()

@@ -31,11 +31,13 @@ class MLFlowLogger:
             mlflow.log_metric(key=key, value=value, step=step, run_id=self.run_id)
 
     def log_param(self, param_name: str, param: Any):
-        mlflow.log_param(param_name, param)
+        if self.log:
+            mlflow.log_param(param_name, param)
 
     def log_params(self, params_to_log: dict[str, Any]):
-        for param_name, param in params_to_log.items():
-            mlflow.log_param(param_name, param)
+        if self.log:
+            for param_name, param in params_to_log.items():
+                mlflow.log_param(param_name, param)
 
     def end_run(self):
         if self.log:
