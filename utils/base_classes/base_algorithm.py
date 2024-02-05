@@ -145,7 +145,7 @@ class BaseAlgorithm(ABC):
         best_avg_eval_score = -np.inf
         for time_step, transition in self.collect_data():
             self.agent.experience_replay.push(transition)
-            self.agent.optimize_model()
+            self.agent.optimize_model(time_step)
             if time_step % self.writing_period == 0 and time_step != 0:
                 avg_eval_score = self.evaluate(time_step, episodes=10)
                 if avg_eval_score >= best_avg_eval_score:

@@ -25,6 +25,8 @@ class VanillaDQNAgent(BaseAgent):
         epsilon_start: float,
         epsilon_end: float,
         exploration_percentage: float,
+        gradient_steps: int,
+        target_update_frequency: int,
         gamma: float,
         tau: float,
         # base agent attributes
@@ -51,6 +53,8 @@ class VanillaDQNAgent(BaseAgent):
             * 100
             / (time_steps * (exploration_percentage + 1))
         )
+
+        self.gradient_steps: int = gradient_steps
 
         self.gamma: float = gamma
         self.tau: float = tau
@@ -102,15 +106,16 @@ class VanillaDQNAgent(BaseAgent):
         if self.epsilon < self.epsilon_end:
             self.epsilon = self.epsilon_end
 
-    def optimize_model(self):
+    def optimize_model(self, time_step: int):
         if len(self.experience_replay) < self.experience_replay.batch_size:
             return
 
-        transitions = self.get_transitions()
+        for _ in range(self.gradient_steps):
+            transitions = self.get_transitions()
 
-        total_loss = self.compute_loss(*transitions)
+            total_loss = self.compute_loss(*transitions)
 
-        self.update_parameters(total_loss)
+            self.update_parameters(total_loss, time_step)
 
     def get_transitions(self):
         transitions: Transition = self.experience_replay.sample()
@@ -167,17 +172,18 @@ class VanillaDQNAgent(BaseAgent):
 
         return total_loss
 
-    def update_parameters(self, total_loss: Tensor):
+    def update_parameters(self, total_loss: Tensor, time_step: int):
         self.optimizer.zero_grad()
         total_loss.backward()
         # In-place gradient clipping
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
 
-        target_net_state_dict = self.target_net.state_dict()
-        policy_net_state_dict = self.policy_net.state_dict()
-        for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[
-                key
-            ] * self.tau + target_net_state_dict[key] * (1 - self.tau)
-        self.target_net.load_state_dict(target_net_state_dict)
+        if time_step % self.target_update_frequency:
+            target_net_state_dict = self.target_net.state_dict()
+            policy_net_state_dict = self.policy_net.state_dict()
+            for key in policy_net_state_dict:
+                target_net_state_dict[key] = policy_net_state_dict[
+                    key
+                ] * self.tau + target_net_state_dict[key] * (1 - self.tau)
+            self.target_net.load_state_dict(target_net_state_dict)

@@ -17,6 +17,8 @@ class VanillaDQN(BaseAlgorithm):
         epsilon_start: float = 1,
         epsilon_end: float = 0.001,
         exploration_percentage: float = 50,
+        gradient_steps: int = 1,
+        target_update_frequency: int = 10,
         gamma: float = 0.99,
         tau: float = 0.005,
         # base algorithm attributes
@@ -81,6 +83,8 @@ class VanillaDQN(BaseAlgorithm):
             epsilon_start=epsilon_start,
             epsilon_end=epsilon_end,
             exploration_percentage=exploration_percentage,
+            gradient_steps=gradient_steps,
+            target_update_frequency=target_update_frequency,
             gamma=gamma,
             tau=tau,
             neural_network=neural_network,

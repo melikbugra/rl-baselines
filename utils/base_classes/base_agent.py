@@ -90,7 +90,7 @@ class BaseAgent(ABC):
         pass
 
     @abstractmethod
-    def optimize_model(self) -> None:
+    def optimize_model(self, time_step: int) -> None:
         """Optimize the model of the agent"""
         pass
 

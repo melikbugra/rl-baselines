@@ -1,4 +1,5 @@
 models
+mlruns
 requirements.txt
 
 # Created by https://www.toptal.com/developers/gitignore/api/python
