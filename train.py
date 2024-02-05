@@ -5,7 +5,7 @@ from value_based.dqn import VanillaDQN
 
 
 def main():
-    env = gym.make("LunarLander-v2")
+    env = gym.make("CartPole-v1")
     model = VanillaDQN(
         env=env,
         time_steps=200000,

@@ -37,7 +37,10 @@ class BaseWriter(ABC):
 
     @abstractmethod
     def calculate_averages(self):
-        self.avg_train_score = np.mean(self.train_scores[-20:])
+        if len(self.train_scores) > 0:
+            self.avg_train_score = np.mean(self.train_scores[-20:])
+        else:
+            self.avg_train_score = np.nan
 
     @abstractmethod
     def add_row_to_table(self):

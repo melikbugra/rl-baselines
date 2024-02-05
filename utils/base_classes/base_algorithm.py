@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import ast
 from copy import deepcopy
 from pathlib import Path
 from typing import Iterator
@@ -10,6 +11,7 @@ from gymnasium.spaces import Discrete, MultiDiscrete
 from gymnasium.wrappers import normalize
 import numpy as np
 import matplotlib.pyplot as plt
+from optuna.trial import BaseTrial
 import torch
 
 from utils.base_classes.base_experience_replay import BaseExperienceReplay, Transition
@@ -30,7 +32,7 @@ class BaseAlgorithm(ABC):
         time_steps: int = 100000,
         learning_rate: float = 3e-4,
         network_type: str = "mlp",
-        network_arch: list = [128, 128],
+        network_arch: list | str = [128, 128],
         experience_replay_type: str = "er",
         experience_replay_size: int = 10000,
         batch_size: int = 64,
@@ -47,7 +49,10 @@ class BaseAlgorithm(ABC):
         self.time_steps: int = time_steps
         self.learning_rate: float = learning_rate
         self.network_type: str = network_type
-        self.network_arch: list = network_arch
+        if isinstance(network_arch, str):
+            self.network_arch: list = ast.literal_eval(network_arch)
+        else:
+            self.network_arch: list = network_arch
         self.experience_replay_type: str = experience_replay_type
         self.experience_replay_size: int = experience_replay_size
         self.batch_size: int = batch_size
@@ -139,17 +144,25 @@ class BaseAlgorithm(ABC):
 
         return experience_replay
 
-    def train(self):
+    def train(self, trial: BaseTrial = None) -> float:
         """Train the agent"""
         self.start_time = time.perf_counter()
         best_avg_eval_score = -np.inf
         for time_step, transition in self.collect_data():
             self.agent.experience_replay.push(transition)
             self.agent.optimize_model(time_step)
-            if time_step % self.writing_period == 0 and time_step != 0:
-                avg_eval_score = self.evaluate(time_step, episodes=10)
-                if avg_eval_score >= best_avg_eval_score:
+            if (
+                time_step % self.writing_period == 0 and time_step != 0
+            ) or time_step == self.time_steps:
+                last_avg_eval_score = self.evaluate(time_step, episodes=10)
+
+                # For optuna pruning
+                if trial:
+                    trial.report(last_avg_eval_score, time_step)
+
+                if last_avg_eval_score >= best_avg_eval_score:
                     self.save(folder=self.models_folder, checkpoint="best_avg")
+                    best_avg_eval_score = last_avg_eval_score
                 self.writer.time_elapsed = time.perf_counter() - self.start_time
                 print(self.writer)
                 self.writer.reset(time_step + self.writing_period)
@@ -159,6 +172,8 @@ class BaseAlgorithm(ABC):
         if self.plot_train_sores:
             self.plot_scores(show_result=True)
             plt.show()
+
+        return best_avg_eval_score
 
     def evaluate(self, time_step: int = None, render: bool = False, episodes: int = 10):
         if render:

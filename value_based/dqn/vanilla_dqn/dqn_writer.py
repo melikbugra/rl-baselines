@@ -34,7 +34,11 @@ class DQNWriter(BaseWriter):
 
     def calculate_averages(self):
         super().calculate_averages()
-        self.avg_loss = np.mean(self.losses[-100:])
+        if len(self.losses) > 0:
+            self.avg_loss = np.mean(self.losses[-100:])
+        else:
+            self.avg_loss = np.nan
+
         self.mlflow_loger.log_metric(
             "Average Loss",
             self.avg_loss,

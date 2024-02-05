@@ -55,6 +55,7 @@ class VanillaDQNAgent(BaseAgent):
         )
 
         self.gradient_steps: int = gradient_steps
+        self.target_update_frequency = target_update_frequency
 
         self.gamma: float = gamma
         self.tau: float = tau
