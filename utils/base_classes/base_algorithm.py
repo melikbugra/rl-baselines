@@ -153,7 +153,7 @@ class BaseAlgorithm(ABC):
             self.agent.optimize_model(time_step)
             if (
                 time_step % self.writing_period == 0 and time_step != 0
-            ) or time_step == self.time_steps:
+            ) or time_step == self.time_steps - 1:
                 last_avg_eval_score = self.evaluate(time_step, episodes=10)
 
                 # For optuna pruning
@@ -167,7 +167,8 @@ class BaseAlgorithm(ABC):
                 print(self.writer)
                 self.writer.reset(time_step + self.writing_period)
 
-        self.mlflow_logger.end_run()
+        if self.mlflow_logger.log:
+            self.mlflow_logger.end_run()
 
         if self.plot_train_sores:
             self.plot_scores(show_result=True)

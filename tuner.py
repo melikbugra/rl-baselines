@@ -41,7 +41,7 @@ def main():
         model_class=VanillaDQN,
         param_dicts=param_dicts,
         mlflow_tracking_uri="http://mlflow.melikbugraozcelik.com/",
-        n_jobs=4,
+        n_jobs=1,
     )
 
     tuner.tune()
