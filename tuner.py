@@ -16,7 +16,7 @@ def main():
         {"name": "gamma", "low": 0.9, "high": 0.99, "type": "float"},
         {
             "name": "time_steps",
-            "choices": [int(5e4), int(1e5), int(3e5), int(5e5)],
+            "choices": [int(1e3), int(2e3)],
             "type": "categorical",
         },
         {
