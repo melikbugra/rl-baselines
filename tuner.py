@@ -7,7 +7,7 @@ from value_based.dqn import VanillaDQN
 
 
 def main():
-    env = gym.make("LunarLander-v2")
+    env = gym.make("CartPole-v1")
 
     param_dicts = [
         {"name": "learning_rate", "low": 1e-4, "high": 1e-3, "type": "float"},
@@ -16,7 +16,7 @@ def main():
         {"name": "gamma", "low": 0.9, "high": 0.99, "type": "float"},
         {
             "name": "time_steps",
-            "choices": [int(1e5), int(3e5), int(5e5)],
+            "choices": [int(5e4), int(1e5), int(3e5), int(5e5)],
             "type": "categorical",
         },
         {
@@ -32,6 +32,11 @@ def main():
         {
             "name": "batch_size",
             "choices": [64, 128, 256],
+            "type": "categorical",
+        },
+        {
+            "name": "normalize_observation",
+            "choices": [True, False],
             "type": "categorical",
         },
     ]
