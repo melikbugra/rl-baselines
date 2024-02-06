@@ -29,16 +29,13 @@ class Tuner:
         self.n_jobs: int = n_jobs
         self.mlflow_tracking_uri: str = mlflow_tracking_uri
         mlflow.set_tracking_uri(mlflow_tracking_uri)
+        self.define_experiment(
+            algo_name=model_class.algo_name,
+        )
 
-    def define_experiment_and_run(
-        self, params_to_log: dict[str, Any], algo_name: str, trial: BaseTrial
-    ):
+    def define_experiment(self, algo_name: str):
         experiment_name = f"Tuning: {self.env.unwrapped.spec.id}_{algo_name.lower().replace(' ', '_')}"
         mlflow.set_experiment(experiment_name)
-        run_name = datetime.now().strftime(f"Trial: {trial.number}")
-        self.active_run = mlflow.start_run(run_name=run_name)
-        for param_name, param in params_to_log.items():
-            mlflow.log_param(param_name, param)
 
     def suggest_param(self, trial: BaseTrial, param_dict: dict):
         if param_dict["type"] == "float":
@@ -72,6 +69,9 @@ class Tuner:
     def objective(self, trial: BaseTrial):
         pruned: bool = False
         suggested_params = self.sample_params(trial)
+        print(f"Trial: {trial.number}:")
+        for param_name, param in suggested_params.items():
+            print(f"\t{param_name}: {param}")
 
         if suggested_params in self.tried_params:
             raise optuna.exceptions.TrialPruned("Pruned due to repeated parameters!!!")
@@ -83,24 +83,25 @@ class Tuner:
             **suggested_params,
         )
 
-        self.define_experiment_and_run(
-            params_to_log={param: val for (param, val) in suggested_params.items()},
-            algo_name=model.algo_name,
-            trial=trial,
-        )
+        run_name = f"Trial: {trial.number}"
+        with mlflow.start_run(
+            run_name=run_name
+        ) as mlflow_run:  # pass this to train, also in normal training
+            for param_name, param in suggested_params.items():
+                mlflow.log_param(param_name, param)
 
-        model.writing_period = model.time_steps
-        model.writer.time_step = model.time_steps
-        best_avg_eval_score = model.train(trial)
+            model.writing_period = model.time_steps
+            model.writer.time_step = model.time_steps
+            best_avg_eval_score = model.train(trial)
 
-        if trial.should_prune():
-            pruned = True
-            mlflow.log_param("Best Average Evaluation Score", None)
-            mlflow.log_param("Pruned", pruned)
-            raise optuna.exceptions.TrialPruned("Pruned due to bad performance!!!")
-        else:
-            mlflow.log_param("Best Average Evaluation Score", best_avg_eval_score)
-            mlflow.log_param("Pruned", pruned)
+            if trial.should_prune():
+                pruned = True
+                mlflow.log_param("Best Average Evaluation Score", None)
+                mlflow.log_param("Pruned", pruned)
+                raise optuna.exceptions.TrialPruned("Pruned due to bad performance!!!")
+            else:
+                mlflow.log_param("Best Average Evaluation Score", best_avg_eval_score)
+                mlflow.log_param("Pruned", pruned)
 
         return best_avg_eval_score
 

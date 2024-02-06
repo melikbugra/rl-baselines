@@ -26,6 +26,8 @@ from utils.mlflow_logger.mlflow_logger import MLFlowLogger
 class BaseAlgorithm(ABC):
     """Base class for RL algorithms"""
 
+    algo_name: str
+
     def __init__(
         self,
         env: Env,

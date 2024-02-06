@@ -11,6 +11,8 @@ from value_based.dqn.vanilla_dqn.dqn_writer import DQNWriter
 
 
 class VanillaDQN(BaseAlgorithm):
+    algo_name: str = "Vanilla DQN"
+
     def __init__(
         self,
         env: Env,
