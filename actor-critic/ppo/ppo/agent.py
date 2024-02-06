@@ -143,19 +143,25 @@ class PPOAgent:
         self.memory.clear()
 
 
-    def evaluate(self, env_name: str, episodes: int):
+    def evaluate(self, env_name: str, episodes: int, save_data: bool=False):
         env: gym.Env = gym.make(env_name)
         scores = []
+        if save_data:
+            states = []
+            actions = []
         for episode in range(episodes):
             state = env.reset()
             state = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0).view(1, -1)
             score = 0
 
             while True:
-                env.render()
+                # env.render()
                 
                 action, prob, value = self.select_action(state)
                 next_state, reward, done , _ = env.step(action)
+                if save_data:
+                    states.append(state)
+                    actions.append(action)
                 score += reward
                 reward = torch.tensor([reward], device=self.device)
                 next_state = torch.tensor(next_state, dtype=torch.float32, device=self.device).unsqueeze(0).view(1, -1)
@@ -165,8 +171,14 @@ class PPOAgent:
 
                 if done:
                     scores.append(score)
-                    print(f"Episode score: {score}")
+                    print(f"Episode:{episode}, Score: {score}")
                     break
-
-        return np.mean(scores)
+        
+        
+        if save_data:
+            states = np.array(states)
+            actions = np.array(actions)
+            return states, actions
+        else:
+            return np.mean(scores)
     

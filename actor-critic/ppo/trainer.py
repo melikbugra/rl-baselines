@@ -8,8 +8,6 @@ import torch
 from ppo.replay_memory import Transition
 from ppo.agent import PPOAgent
 
-import highway_env
-
 import warnings
 
 # Ignore all warnings
@@ -48,7 +46,7 @@ class Trainer:
             score = 0
             done = False
             while not done:
-                if episode > 500:
+                if episode > 1000:
                     self.env.render()
                 action, prob, value = self.agent.select_action(state)
                 next_state, reward, done , _ = self.env.step(action)
@@ -84,8 +82,8 @@ class Trainer:
 
 if __name__ == "__main__":
     trainer = Trainer(
-        env_name="CartPole-v0", render=True, episodes=2000, batch_size=5,
-        alpha=3e-4, gamma=0.99, policy_clip=0.2, fc_neuron_nums=[128,128], device="cpu", n_epochs=4, gae_lambda=0.95)
+        env_name="CartPole-v0", render=True, episodes=1100, batch_size=10,
+        alpha=1e-4, gamma=0.99, policy_clip=0.2, fc_neuron_nums=[128,128], device="cpu", n_epochs=4, gae_lambda=0.95)
     trainer.train()
 
         
