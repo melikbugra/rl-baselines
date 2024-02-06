@@ -5,6 +5,7 @@ from gymnasium import Env
 import optuna
 from optuna.trial import BaseTrial
 import mlflow
+import numpy as np
 
 from utils.base_classes.base_algorithm import BaseAlgorithm
 
@@ -28,10 +29,14 @@ class Tuner:
         self.n_trials: int = n_trials
         self.n_jobs: int = n_jobs
         self.mlflow_tracking_uri: str = mlflow_tracking_uri
+
         mlflow.set_tracking_uri(mlflow_tracking_uri)
         self.define_experiment(
             algo_name=model_class.algo_name,
         )
+
+        self.best_trial: int = 0
+        self.best_trial_score: float = -np.inf
 
     def define_experiment(self, algo_name: str):
         experiment_name = f"Tuning: {self.env.unwrapped.spec.id}_{algo_name.lower().replace(' ', '_')}"
@@ -84,9 +89,7 @@ class Tuner:
         )
 
         run_name = f"Trial: {trial.number}"
-        with mlflow.start_run(
-            run_name=run_name
-        ) as mlflow_run:  # pass this to train, also in normal training
+        with mlflow.start_run(run_name=run_name):
             for param_name, param in suggested_params.items():
                 mlflow.log_param(param_name, param)
 
@@ -102,6 +105,12 @@ class Tuner:
             else:
                 mlflow.log_param("Best Average Evaluation Score", best_avg_eval_score)
                 mlflow.log_param("Pruned", pruned)
+
+            if best_avg_eval_score > self.best_trial_score:
+                self.best_trial_score = best_avg_eval_score
+                self.best_trial = trial.number
+
+            mlflow.log_param("Best Trial", self.best_trial)
 
         return best_avg_eval_score
 
