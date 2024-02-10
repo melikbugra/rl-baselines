@@ -33,33 +33,7 @@ class Tuner:
         self.n_jobs: int = n_jobs
         self.storage: str = storage
 
-        tuning_folder = Path("tuning")
-        current_tuning_folder = (
-            tuning_folder / f"{self.model_class.algo_name}_{self.env_name}"
-        )
-        os.makedirs("tuning", exist_ok=True)
-        os.makedirs(current_tuning_folder, exist_ok=True)
-        self.tried_params_file = current_tuning_folder / "tried_params_history.json"
-
-        if os.path.exists(self.tried_params_file):
-            self.tried_params_history = self.load_params_dict()
-        else:
-            self.tried_params_history = {
-                "best_trial": -1,
-                "trials": [],
-                "params_history": [],
-            }
-
-        self.best_trial: int = self.tried_params_history["best_trial"]
         self.best_score: float = -np.inf
-
-    def load_params_dict(self):
-        with open(self.tried_params_file, "rb") as jsn:
-            return json.load(jsn)
-
-    def save_params_dict(self):
-        with open(self.tried_params_file, "w") as jsn:
-            json.dump(self.tried_params_history, jsn)
 
     def suggest_param(self, trial: BaseTrial, param_dict: dict):
         if param_dict["type"] == "float":
@@ -92,20 +66,15 @@ class Tuner:
 
     def objective(self, trial: BaseTrial):
         print(f"Trial: {trial.number} has been started.")
-        current_trial_dict = {}
-        pruned: bool = False
-        current_trial_dict["number"] = trial.number
         suggested_params = self.sample_params(trial)
-        table = PrettyTable()
-        field_names = ["Trial"] + list(suggested_params.keys()) + ["Time"]
-        table.field_names = field_names
-        row = [trial.number] + list(suggested_params.values())
 
-        if suggested_params in self.tried_params_history["params_history"]:
-            raise optuna.exceptions.TrialPruned("Pruned due to repeated parameters!!!")
-        else:
-            current_trial_dict["params"] = suggested_params
-            self.tried_params_history["params_history"].append(suggested_params)
+        for completed_trial in trial.study.get_trials(deepcopy=False):
+            if completed_trial.state != optuna.trial.TrialState.COMPLETE:
+                continue
+
+            if completed_trial.params == trial.params:
+                print(f"Found duplicate trial with value: {completed_trial.value}")
+                return completed_trial.value
 
         env = gym.make(self.env_name)
         model: BaseAlgorithm = self.model_class(
@@ -113,41 +82,26 @@ class Tuner:
             **suggested_params,
         )
 
-        try:
-            best_avg_eval_score = model.train(trial)
+        best_avg_eval_score = model.train(trial)
 
-            if trial.should_prune():
-                pruned = True
-                current_trial_dict["pruned"] = pruned
-                raise optuna.exceptions.TrialPruned("Pruned due to bad performance!!!")
+        if trial.should_prune():
+            raise optuna.exceptions.TrialPruned("Pruned due to bad performance!!!")
 
-            if best_avg_eval_score > self.best_score:
-                self.best_score = best_avg_eval_score
-                self.best_trial = trial.number
+        if best_avg_eval_score > self.best_score:
+            self.best_score = best_avg_eval_score
+            self.best_trial = trial.number
 
-            self.tried_params_history["best_trial"] = self.best_trial
-            current_trial_dict["score"] = best_avg_eval_score
-            current_trial_dict["time_elapsed"] = model.time_elapsed
+        print(
+            f"Trial {trial.number} has finished with score of {best_avg_eval_score} in {model.time_elapsed} seconds."
+        )
 
-        except optuna.exceptions.TrialPruned:
-            current_trial_dict["score"] = None
-            current_trial_dict["time_elapsed"] = None
-
-        finally:
-            row = row + [model.time_elapsed]
-            table.add_row(row)
-            # print(table)
-
-            self.tried_params_history["trials"].append(current_trial_dict)
-            self.save_params_dict()
-
-        return best_avg_eval_score
+        return -(best_avg_eval_score**2) / model.time_elapsed
 
     def tune(self):
         sampler = optuna.samplers.TPESampler(self.sampler_seed)
         study = optuna.create_study(
             study_name=f"{self.model_class.algo_name}_{self.env_name}",
-            direction="maximize",
+            direction="minimize",
             sampler=sampler,
             pruner=optuna.pruners.HyperbandPruner(),
             storage=self.storage,

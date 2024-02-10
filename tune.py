@@ -18,7 +18,11 @@ def main():
             "choices": [int(1e4), int(2e4), int(3e4), int(4e4), int(5e4)],
             "type": "categorical",
         },
-        {"name": "exploration_percentage", "low": 1, "high": 90, "type": "categorical"},
+        {
+            "name": "exploration_percentage",
+            "choices": [10, 20, 50, 70, 90],
+            "type": "categorical",
+        },
         {"name": "gradient_steps", "choices": [1, 2, 3], "type": "categorical"},
         {"name": "gamma", "choices": [0.9, 0.93, 0.95, 0.99], "type": "categorical"},
         {
@@ -52,7 +56,7 @@ def main():
         env_name,
         model_class=VanillaDQN,
         param_dicts=param_dicts,
-        n_jobs=4,
+        n_jobs=8,
         storage="postgresql://optuna:optuna@optuna-db.melikbugraozcelik.com/optuna",
     )
 
