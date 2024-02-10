@@ -95,7 +95,9 @@ class Tuner:
             f"Trial {trial.number} has finished with score of {best_avg_eval_score} in {model.time_elapsed} seconds."
         )
 
-        return -(best_avg_eval_score**2) / model.time_elapsed
+        return (
+            -(best_avg_eval_score**2) / model.time_elapsed
+        )  # we take negative score to select direction to minimize, which optuna suggests
 
     def tune(self):
         sampler = optuna.samplers.TPESampler(self.sampler_seed)

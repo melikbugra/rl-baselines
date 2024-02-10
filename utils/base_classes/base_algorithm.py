@@ -160,7 +160,7 @@ class BaseAlgorithm(ABC):
 
                 # For optuna pruning
                 if trial:
-                    trial.report(last_avg_eval_score, time_step)
+                    trial.report(-last_avg_eval_score, time_step)
 
                 if last_avg_eval_score >= best_avg_eval_score:
                     self.save(folder=self.models_folder, checkpoint="best_avg")
