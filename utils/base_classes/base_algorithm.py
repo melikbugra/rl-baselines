@@ -166,9 +166,11 @@ class BaseAlgorithm(ABC):
                     self.save(folder=self.models_folder, checkpoint="best_avg")
                     best_avg_eval_score = last_avg_eval_score
                 self.writer.time_elapsed = time.perf_counter() - self.start_time
-                print(self.writer)
+                if not trial:
+                    print(self.writer)
                 self.writer.reset(time_step + self.writing_period)
 
+        self.time_elapsed = time.perf_counter() - self.start_time
         if self.mlflow_logger.log:
             self.mlflow_logger.end_run()
 

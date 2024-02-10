@@ -11,7 +11,7 @@ from value_based.dqn.vanilla_dqn.dqn_writer import DQNWriter
 
 
 class VanillaDQN(BaseAlgorithm):
-    algo_name: str = "Vanilla DQN"
+    algo_name: str = "Vanilla-DQN"
 
     def __init__(
         self,
@@ -39,7 +39,7 @@ class VanillaDQN(BaseAlgorithm):
         mlflow_tracking_uri: str = None,
         normalize_observation: bool = False,
     ) -> None:
-        self.algo_name = "Vanilla DQN"
+        self.algo_name = "Vanilla-DQN"
         super().__init__(
             env=env,
             time_steps=time_steps,

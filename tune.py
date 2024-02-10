@@ -7,13 +7,20 @@ from value_based.dqn import VanillaDQN
 
 
 def main():
-    env = gym.make("CartPole-v1")
-
+    env_name = "CartPole-v0"
     param_dicts = [
-        {"name": "learning_rate", "low": 1e-4, "high": 1e-3, "type": "float"},
-        {"name": "exploration_percentage", "low": 1, "high": 90, "type": "int"},
-        {"name": "gradient_steps", "low": 1, "high": 10, "type": "int"},
-        {"name": "gamma", "low": 0.9, "high": 0.99, "type": "float"},
+        # {"name": "learning_rate", "low": 1e-4, "high": 1e-3, "type": "float"},
+        # {"name": "exploration_percentage", "low": 1, "high": 90, "type": "int"},
+        # {"name": "gradient_steps", "low": 1, "high": 2, "type": "int"},
+        # {"name": "gamma", "low": 0.9, "high": 0.99, "type": "float"},
+        {
+            "name": "learning_rate",
+            "choices": [int(1e4), int(2e4), int(3e4), int(4e4), int(5e4)],
+            "type": "categorical",
+        },
+        {"name": "exploration_percentage", "low": 1, "high": 90, "type": "categorical"},
+        {"name": "gradient_steps", "choices": [1, 2, 3], "type": "categorical"},
+        {"name": "gamma", "choices": [0.9, 0.93, 0.95, 0.99], "type": "categorical"},
         {
             "name": "time_steps",
             "choices": [int(1e4), int(2e4), int(3e4), int(4e4), int(5e4)],
@@ -26,7 +33,7 @@ def main():
         },
         {
             "name": "experience_replay_size",
-            "choices": [int(1e4), int(5e4), int(1e5)],
+            "choices": [int(1e4), int(5e4)],
             "type": "categorical",
         },
         {
@@ -42,11 +49,11 @@ def main():
     ]
 
     tuner = Tuner(
-        env,
+        env_name,
         model_class=VanillaDQN,
         param_dicts=param_dicts,
-        mlflow_tracking_uri="http://mlflow.melikbugraozcelik.com/",
-        n_jobs=1,
+        n_jobs=4,
+        storage="postgresql://optuna:optuna@optuna-db.melikbugraozcelik.com/optuna",
     )
 
     tuner.tune()

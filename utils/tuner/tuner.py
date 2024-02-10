@@ -1,11 +1,15 @@
 from datetime import datetime
+import json
+import os
+from pathlib import Path
 from typing import Type, Any
 
+import gymnasium as gym
 from gymnasium import Env
 import optuna
 from optuna.trial import BaseTrial
-import mlflow
 import numpy as np
+from prettytable import PrettyTable
 
 from utils.base_classes.base_algorithm import BaseAlgorithm
 
@@ -13,34 +17,49 @@ from utils.base_classes.base_algorithm import BaseAlgorithm
 class Tuner:
     def __init__(
         self,
-        env: Env,
+        env_name: str,
         model_class: Type[BaseAlgorithm],
         param_dicts: list[dict],
         sampler_seed: int = 42,
         n_trials: int = 100,
         n_jobs: int = 1,
-        mlflow_tracking_uri: str = None,
+        storage: str = None,
     ) -> None:
-        self.tried_params: list = []
         self.param_dicts = param_dicts
-        self.env: Env = env
+        self.env_name: str = env_name
         self.model_class: Type[BaseAlgorithm] = model_class
         self.sampler_seed: int = sampler_seed
         self.n_trials: int = n_trials
         self.n_jobs: int = n_jobs
-        self.mlflow_tracking_uri: str = mlflow_tracking_uri
+        self.storage: str = storage
 
-        mlflow.set_tracking_uri(mlflow_tracking_uri)
-        self.define_experiment(
-            algo_name=model_class.algo_name,
+        tuning_folder = Path("tuning")
+        current_tuning_folder = (
+            tuning_folder / f"{self.model_class.algo_name}_{self.env_name}"
         )
+        os.makedirs("tuning", exist_ok=True)
+        os.makedirs(current_tuning_folder, exist_ok=True)
+        self.tried_params_file = current_tuning_folder / "tried_params_history.json"
 
-        self.best_trial: int = 0
-        self.best_trial_score: float = -np.inf
+        if os.path.exists(self.tried_params_file):
+            self.tried_params_history = self.load_params_dict()
+        else:
+            self.tried_params_history = {
+                "best_trial": -1,
+                "trials": [],
+                "params_history": [],
+            }
 
-    def define_experiment(self, algo_name: str):
-        experiment_name = f"Tuning: {self.env.unwrapped.spec.id}_{algo_name.lower().replace(' ', '_')}"
-        mlflow.set_experiment(experiment_name)
+        self.best_trial: int = self.tried_params_history["best_trial"]
+        self.best_score: float = -np.inf
+
+    def load_params_dict(self):
+        with open(self.tried_params_file, "rb") as jsn:
+            return json.load(jsn)
+
+    def save_params_dict(self):
+        with open(self.tried_params_file, "w") as jsn:
+            json.dump(self.tried_params_history, jsn)
 
     def suggest_param(self, trial: BaseTrial, param_dict: dict):
         if param_dict["type"] == "float":
@@ -72,55 +91,67 @@ class Tuner:
         return suggested_params
 
     def objective(self, trial: BaseTrial):
+        print(f"Trial: {trial.number} has been started.")
+        current_trial_dict = {}
         pruned: bool = False
+        current_trial_dict["number"] = trial.number
         suggested_params = self.sample_params(trial)
-        print(f"Trial: {trial.number}:")
-        for param_name, param in suggested_params.items():
-            print(f"\t{param_name}: {param}")
+        table = PrettyTable()
+        field_names = ["Trial"] + list(suggested_params.keys()) + ["Time"]
+        table.field_names = field_names
+        row = [trial.number] + list(suggested_params.values())
 
-        if suggested_params in self.tried_params:
+        if suggested_params in self.tried_params_history["params_history"]:
             raise optuna.exceptions.TrialPruned("Pruned due to repeated parameters!!!")
         else:
-            self.tried_params.append(suggested_params)
+            current_trial_dict["params"] = suggested_params
+            self.tried_params_history["params_history"].append(suggested_params)
 
+        env = gym.make(self.env_name)
         model: BaseAlgorithm = self.model_class(
-            self.env,
+            env,
             **suggested_params,
         )
 
-        run_name = f"Trial: {trial.number}"
-        with mlflow.start_run(run_name=run_name):
-            for param_name, param in suggested_params.items():
-                mlflow.log_param(param_name, param)
-
-            model.writing_period = model.time_steps
-            model.writer.time_step = model.time_steps
+        try:
             best_avg_eval_score = model.train(trial)
 
             if trial.should_prune():
                 pruned = True
-                mlflow.log_param("Best Average Evaluation Score", None)
-                mlflow.log_param("Pruned", pruned)
+                current_trial_dict["pruned"] = pruned
                 raise optuna.exceptions.TrialPruned("Pruned due to bad performance!!!")
-            else:
-                mlflow.log_param("Best Average Evaluation Score", best_avg_eval_score)
-                mlflow.log_param("Pruned", pruned)
 
-            if best_avg_eval_score > self.best_trial_score:
-                self.best_trial_score = best_avg_eval_score
+            if best_avg_eval_score > self.best_score:
+                self.best_score = best_avg_eval_score
                 self.best_trial = trial.number
 
-            mlflow.log_param("Best Trial", self.best_trial)
+            self.tried_params_history["best_trial"] = self.best_trial
+            current_trial_dict["score"] = best_avg_eval_score
+            current_trial_dict["time_elapsed"] = model.time_elapsed
+
+        except optuna.exceptions.TrialPruned:
+            current_trial_dict["score"] = None
+            current_trial_dict["time_elapsed"] = None
+
+        finally:
+            row = row + [model.time_elapsed]
+            table.add_row(row)
+            # print(table)
+
+            self.tried_params_history["trials"].append(current_trial_dict)
+            self.save_params_dict()
 
         return best_avg_eval_score
 
     def tune(self):
         sampler = optuna.samplers.TPESampler(self.sampler_seed)
         study = optuna.create_study(
-            study_name=self.env.spec.id,
+            study_name=f"{self.model_class.algo_name}_{self.env_name}",
             direction="maximize",
             sampler=sampler,
             pruner=optuna.pruners.HyperbandPruner(),
+            storage=self.storage,
+            load_if_exists=True,
         )
         study.optimize(
             self.objective,
