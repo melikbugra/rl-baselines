@@ -15,7 +15,7 @@ def main():
         # {"name": "gamma", "low": 0.9, "high": 0.99, "type": "float"},
         {
             "name": "learning_rate",
-            "choices": [int(1e4), int(2e4), int(3e4), int(4e4), int(5e4)],
+            "choices": [1e-4, 2e-4, 3e-4, 4e-4, 5e-4],
             "type": "categorical",
         },
         {
@@ -56,7 +56,7 @@ def main():
         env_name,
         model_class=VanillaDQN,
         param_dicts=param_dicts,
-        n_jobs=8,
+        n_jobs=-1,
         storage="postgresql://optuna:optuna@optuna-db.melikbugraozcelik.com/optuna",
     )
 
