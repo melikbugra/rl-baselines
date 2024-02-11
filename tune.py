@@ -1,13 +1,13 @@
 from utils.tuner import Tuner
 
 
-import gymnasium as gym
+import x_driving_env
 
 from value_based.dqn import VanillaDQN
 
 
 def main():
-    env_name = "CartPole-v0"
+    env_name = "xDriving-v0"
     param_dicts = [
         {"name": "learning_rate", "low": 1e-4, "high": 1e-3, "type": "float"},
         # {"name": "exploration_percentage", "low": 1, "high": 90, "type": "int"},
@@ -56,6 +56,7 @@ def main():
         env_name,
         model_class=VanillaDQN,
         param_dicts=param_dicts,
+        n_trials=1000,
         n_jobs=-1,
         storage="postgresql://optuna:optuna@optuna-db.melikbugraozcelik.com/optuna",
     )
