@@ -17,7 +17,7 @@ def main():
         render=False,
         exploration_percentage=50,
         writing_period=10000,
-        plot_train_sores=True,
+        plot_train_sores=False,
         mlflow_tracking_uri="http://mlflow.melikbugraozcelik.com/",
         normalize_observation=True,
         network_arch=[256, 256],
