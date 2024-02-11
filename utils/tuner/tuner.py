@@ -67,7 +67,7 @@ class Tuner:
         return suggested_params
 
     def objective(self, trial: BaseTrial):
-        self.logger.info(f"Trial: {trial.number} has been started.")
+        print(f"Trial: {trial.number} has been started.", flush=True)
         suggested_params = self.sample_params(trial)
 
         for completed_trial in trial.study.get_trials(deepcopy=False):
@@ -75,8 +75,9 @@ class Tuner:
                 continue
 
             if completed_trial.params == trial.params:
-                self.logger.info(
-                    f"Found duplicate trial with value: {completed_trial.value}"
+                print(
+                    f"Found duplicate trial with value: {completed_trial.value}",
+                    flush=True,
                 )
                 return completed_trial.value
 
@@ -95,8 +96,9 @@ class Tuner:
             self.best_score = best_avg_eval_score
             self.best_trial = trial.number
 
-        self.logger.info(
-            f"Trial {trial.number} has finished with score of {best_avg_eval_score} in {model.time_elapsed} seconds."
+        print(
+            f"Trial {trial.number} has finished with score of {best_avg_eval_score} in {model.time_elapsed} seconds.",
+            flush=True,
         )
 
         return (
