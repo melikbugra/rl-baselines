@@ -33,6 +33,8 @@ class Tuner:
         self.n_jobs: int = n_jobs
         self.storage: str = storage
 
+        self.logger = optuna.logging.get_logger("USER-LOGGER")
+
         self.best_score: float = -np.inf
 
     def suggest_param(self, trial: BaseTrial, param_dict: dict):
@@ -65,7 +67,7 @@ class Tuner:
         return suggested_params
 
     def objective(self, trial: BaseTrial):
-        print(f"Trial: {trial.number} has been started.")
+        self.logger.info(f"Trial: {trial.number} has been started.")
         suggested_params = self.sample_params(trial)
 
         for completed_trial in trial.study.get_trials(deepcopy=False):
@@ -73,7 +75,9 @@ class Tuner:
                 continue
 
             if completed_trial.params == trial.params:
-                print(f"Found duplicate trial with value: {completed_trial.value}")
+                self.logger.info(
+                    f"Found duplicate trial with value: {completed_trial.value}"
+                )
                 return completed_trial.value
 
         env = gym.make(self.env_name)
@@ -91,7 +95,7 @@ class Tuner:
             self.best_score = best_avg_eval_score
             self.best_trial = trial.number
 
-        print(
+        self.logger.info(
             f"Trial {trial.number} has finished with score of {best_avg_eval_score} in {model.time_elapsed} seconds."
         )
 
