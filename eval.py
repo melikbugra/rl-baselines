@@ -5,9 +5,9 @@ from value_based.dqn import VanillaDQN
 
 
 def main():
-    env = gym.make("CartPole-v0")
+    env = gym.make("xDrivingBump-v0", render_mode="human")
     model = VanillaDQN(env)
-    model.load("models/CartPole-v0_cpu_last.ckpt")
+    model.load("models/xDrivingBump-v0_cpu_best_avg.ckpt")
     model.evaluate(render=True)
 
 
