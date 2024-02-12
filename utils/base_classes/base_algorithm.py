@@ -180,7 +180,13 @@ class BaseAlgorithm(ABC):
 
         return best_avg_eval_score
 
-    def evaluate(self, time_step: int = None, render: bool = False, episodes: int = 10):
+    def evaluate(
+        self,
+        time_step: int = None,
+        render: bool = False,
+        episodes: int = 10,
+        print_episode_score: bool = False,
+    ):
         if render:
             eval_env: Env = gym.make(self.env.spec.id, render_mode="human")
         else:
@@ -216,6 +222,8 @@ class BaseAlgorithm(ABC):
                 state = next_state
 
             episode_scores.append(episode_score)
+            if print_episode_score:
+                print(f"Score: {episode_score}")
 
         average_score = np.mean(episode_scores)
         if not render:

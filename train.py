@@ -8,7 +8,7 @@ def main():
     env = gym.make("xDriving-v0")
     model = VanillaDQN(
         env=env,
-        time_steps=300000,
+        time_steps=3000000,
         learning_rate=0.00040594615247134503,
         batch_size=256,
         gradient_steps=3,
@@ -17,7 +17,7 @@ def main():
         render=False,
         exploration_percentage=50,
         writing_period=10000,
-        plot_train_sores=False,
+        plot_train_sores=True,
         mlflow_tracking_uri="http://mlflow.melikbugraozcelik.com/",
         normalize_observation=True,
         network_arch=[256, 256],
