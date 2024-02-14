@@ -59,15 +59,16 @@ class VanillaDQN(BaseAlgorithm):
             normalize_observation=normalize_observation,
         )
 
-        self.mlflow_logger.log_params(
-            {
-                "epsilon_start": epsilon_start,
-                "epsilon_end": epsilon_end,
-                "exploration_percentage": exploration_percentage,
-                "gamma": gamma,
-                "tau": tau,
-            }
-        )
+        if self.mlflow_logger.log:
+            self.mlflow_logger.log_params(
+                {
+                    "epsilon_start": epsilon_start,
+                    "epsilon_end": epsilon_end,
+                    "exploration_percentage": exploration_percentage,
+                    "gamma": gamma,
+                    "tau": tau,
+                }
+            )
 
         self.writer: DQNWriter = DQNWriter(
             writing_period=writing_period,

@@ -87,22 +87,24 @@ class Tuner:
             **suggested_params,
         )
 
-        best_avg_eval_score = model.train(trial)
+        model.writing_period = model.time_steps / 10
+
+        last_avg_eval_score = model.train(trial)
 
         if trial.should_prune():
             raise optuna.exceptions.TrialPruned("Pruned due to bad performance!!!")
 
-        if best_avg_eval_score > self.best_score:
-            self.best_score = best_avg_eval_score
+        if last_avg_eval_score > self.best_score:
+            self.best_score = last_avg_eval_score
             self.best_trial = trial.number
 
         print(
-            f"Trial {trial.number} has finished with score of {best_avg_eval_score} in {model.time_elapsed} seconds.",
+            f"Trial {trial.number} has finished with score of {last_avg_eval_score} in {model.time_elapsed} seconds.",
             flush=True,
         )
 
         return (
-            -(best_avg_eval_score**2) / model.time_elapsed
+            -(last_avg_eval_score**2) / model.time_elapsed
         )  # we take negative score to select direction to minimize, which optuna suggests
 
     def tune(self):

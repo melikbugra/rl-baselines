@@ -7,7 +7,7 @@ from value_based.dqn import VanillaDQN
 
 
 def main():
-    env_name = "xDriving-v0"
+    env_name = "CartPole-v1"
     param_dicts = [
         {"name": "learning_rate", "low": 1e-4, "high": 1e-3, "type": "float"},
         # {"name": "exploration_percentage", "low": 1, "high": 90, "type": "int"},
@@ -23,11 +23,11 @@ def main():
             "choices": [10, 20, 50, 70, 90],
             "type": "categorical",
         },
-        {"name": "gradient_steps", "choices": [1, 2, 3], "type": "categorical"},
+        {"name": "gradient_steps", "choices": [1, 2], "type": "categorical"},
         {"name": "gamma", "choices": [0.9, 0.93, 0.95, 0.99], "type": "categorical"},
         {
             "name": "time_steps",
-            "choices": [int(5e4), int(1e5), int(2e5), int(3e5), int(4e5)],
+            "choices": [int(5e4), int(1e5), int(2e5)],
             "type": "categorical",
         },
         {
@@ -56,9 +56,9 @@ def main():
         env_name,
         model_class=VanillaDQN,
         param_dicts=param_dicts,
-        n_trials=1000,
+        n_trials=100,
         n_jobs=-1,
-        storage="postgresql://optuna:optuna@optuna-db.melikbugraozcelik.com/optuna",
+        # storage="postgresql://optuna:optuna@optuna-db.melikbugraozcelik.com/optuna",
     )
 
     tuner.tune()

@@ -13,7 +13,10 @@ class BaseWriter(ABC):
         super().__init__()
         self.table = PrettyTable()
 
-        self.time_step: int = writing_period
+        if writing_period >= time_steps:
+            self.time_step: int = time_steps
+        else:
+            self.time_step: int = writing_period
         self.time_steps: int = time_steps
 
         self.train_scores: list[float] = []

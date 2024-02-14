@@ -178,7 +178,7 @@ class BaseAlgorithm(ABC):
             self.plot_scores(show_result=True)
             plt.show()
 
-        return best_avg_eval_score
+        return last_avg_eval_score
 
     def evaluate(
         self,
