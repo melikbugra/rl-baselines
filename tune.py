@@ -27,7 +27,7 @@ def main():
         {"name": "gamma", "choices": [0.9, 0.93, 0.95, 0.99], "type": "categorical"},
         {
             "name": "time_steps",
-            "choices": [int(5e4), int(1e5), int(2e5)],
+            "choices": [int(5e4)],
             "type": "categorical",
         },
         {
@@ -57,7 +57,7 @@ def main():
         model_class=VanillaDQN,
         param_dicts=param_dicts,
         n_trials=100,
-        n_jobs=-1,
+        n_jobs=1,
         # storage="postgresql://optuna:optuna@optuna-db.melikbugraozcelik.com/optuna",
     )
 

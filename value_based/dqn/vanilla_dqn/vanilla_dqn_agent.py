@@ -65,6 +65,7 @@ class VanillaDQNAgent(BaseAgent):
 
     def select_action(self, state: Tensor) -> Tensor:
         self.adaptive_e_greedy()
+        self.policy_net.train()
 
         sample = random.uniform(0, 1)
         self.steps_done += 1
@@ -74,6 +75,7 @@ class VanillaDQNAgent(BaseAgent):
             return self.select_random_action()
 
     def select_greedy_action(self, state: Tensor) -> Tensor:
+        self.policy_net.eval()
         with torch.no_grad():
             if self.policy_net.action_type == "discrete":
                 # t.max(1) will return the largest column value of each row.
@@ -180,7 +182,7 @@ class VanillaDQNAgent(BaseAgent):
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
 
-        if time_step % self.target_update_frequency:
+        if time_step % self.target_update_frequency == 0:
             target_net_state_dict = self.target_net.state_dict()
             policy_net_state_dict = self.policy_net.state_dict()
             for key in policy_net_state_dict:
