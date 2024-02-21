@@ -51,17 +51,27 @@ class ReplayMemory(BaseExperienceReplay):
 
     def sample(self) -> Transition:
         idxs = np.random.choice(self.size, size=self.batch_size, replace=False)
-        state = (self.state_buffer[idxs],)
-        action = (self.action_buffer[idxs],)
+        state = self.state_buffer[idxs]
+        action = self.action_buffer[idxs]
         # Handle None next_state during sampling
-        next_state = (torch.stack([self.next_state_buffer[idx] for idx in idxs]),)
-        reward = (self.reward_buffer[idxs],)
+        next_state = torch.stack([self.next_state_buffer[idx] for idx in idxs])
+        reward = self.reward_buffer[idxs]
         done = self.done_buffer[idxs]
         batch = Transition(
             state=state, action=action, next_state=next_state, reward=reward, done=done
         )
 
         return batch
+
+    def clear(self):
+        self.state_buffer = torch.zeros_like(self.state_buffer)
+        self.next_state_buffer = [None] * self.max_size
+        self.action_buffer = torch.zeros_like(self.action_buffer)
+        self.reward_buffer = torch.zeros_like(self.reward_buffer)
+        self.done_buffer = torch.zeros_like(self.done_buffer)
+
+        self.ptr = 0
+        self.size = 0
 
     def __len__(self) -> int:
         return self.size

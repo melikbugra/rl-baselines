@@ -128,7 +128,7 @@ class BaseAlgorithm(ABC):
         state_dim = np.prod(self.env.observation_space.shape)
 
         if isinstance(self.env.action_space, Discrete):
-            action_dim = self.env.action_space.n
+            action_dim = 1
 
         if isinstance(self.env.action_space, MultiDiscrete):
             action_dim = len(self.env.action_space.nvec)
@@ -156,7 +156,7 @@ class BaseAlgorithm(ABC):
             if (
                 time_step % self.writing_period == 0 and time_step != 0
             ) or time_step == self.time_steps - 1:
-                last_avg_eval_score = self.evaluate(time_step, episodes=10)
+                last_avg_eval_score = self.evaluate(time_step, episodes=2, render=False)
 
                 # For optuna pruning
                 if trial:
@@ -183,7 +183,7 @@ class BaseAlgorithm(ABC):
     def evaluate(
         self,
         time_step: int = None,
-        render: bool = False,
+        render: bool = True,
         episodes: int = 10,
         print_episode_score: bool = False,
     ):
@@ -233,9 +233,6 @@ class BaseAlgorithm(ABC):
                 average_score,
                 step=time_step,
             )
-        else:
-            for episode_score in episode_scores:
-                print(f"Episode Score: {episode_score}")
 
         return average_score
 

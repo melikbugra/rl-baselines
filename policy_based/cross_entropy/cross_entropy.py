@@ -6,30 +6,25 @@ import torch
 from utils.base_classes import BaseAlgorithm, BaseNeuralNetwork
 from utils.experience_replay import ReplayMemory
 
-from value_based.dqn.vanilla_dqn.vanilla_dqn_agent import VanillaDQNAgent
-from value_based.dqn.vanilla_dqn.dqn_writer import DQNWriter
+from policy_based.cross_entropy.cross_entropy_agent import CrossEntropyAgent
+from policy_based.cross_entropy.cross_entropy_writer import CrossEntropyWriter
 
 
-class VanillaDQN(BaseAlgorithm):
-    algo_name: str = "Vanilla-DQN"
+class CrossEntropy(BaseAlgorithm):
+    algo_name: str = "Cross-Entropy"
 
     def __init__(
         self,
         env: Env,
-        epsilon_start: float = 1,
-        epsilon_end: float = 0.001,
-        exploration_percentage: float = 50,
-        gradient_steps: int = 1,
-        target_update_frequency: int = 10,
-        gamma: float = 0.99,
-        tau: float = 0.005,
+        percentile: int = 70,
+        episodes_to_train: int = 16,
         # base algorithm attributes
         time_steps: int = 100000,
         learning_rate: float = 3e-4,
         network_type: str = "mlp",
         network_arch: list = [128, 128],
         experience_replay_type: str = "er",
-        experience_replay_size: int = 10000,
+        experience_replay_size: int = 10000,  # It will be equal to batch size for cross entropy
         batch_size: int = 64,
         render: bool = False,
         device: str = "cpu",
@@ -39,7 +34,7 @@ class VanillaDQN(BaseAlgorithm):
         mlflow_tracking_uri: str = None,
         normalize_observation: bool = False,
     ) -> None:
-        self.algo_name = "Vanilla-DQN"
+        self.algo_name = "Cross-Entropy"
         super().__init__(
             env=env,
             time_steps=time_steps,
@@ -47,7 +42,7 @@ class VanillaDQN(BaseAlgorithm):
             network_type=network_type,
             network_arch=network_arch,
             experience_replay_type=experience_replay_type,
-            experience_replay_size=experience_replay_size,
+            experience_replay_size=experience_replay_size,  # experience_replay_size will be equal to batch size for cross entropy
             batch_size=batch_size,
             render=render,
             device=device,
@@ -62,15 +57,11 @@ class VanillaDQN(BaseAlgorithm):
         if self.mlflow_logger.log:
             self.mlflow_logger.log_params(
                 {
-                    "epsilon_start": epsilon_start,
-                    "epsilon_end": epsilon_end,
-                    "exploration_percentage": exploration_percentage,
-                    "gamma": gamma,
-                    "tau": tau,
+                    "percentile": percentile,
                 }
             )
 
-        self.writer: DQNWriter = DQNWriter(
+        self.writer: CrossEntropyWriter = CrossEntropyWriter(
             writing_period=writing_period,
             time_steps=time_steps,
             mlflow_logger=self.mlflow_logger,
@@ -80,16 +71,10 @@ class VanillaDQN(BaseAlgorithm):
 
         experience_replay: ReplayMemory = self.make_experience_replay()
 
-        self.agent: VanillaDQNAgent = VanillaDQNAgent(
+        self.agent: CrossEntropyAgent = CrossEntropyAgent(
             env=env,
-            time_steps=time_steps,
-            epsilon_start=epsilon_start,
-            epsilon_end=epsilon_end,
-            exploration_percentage=exploration_percentage,
-            gradient_steps=gradient_steps,
-            target_update_frequency=target_update_frequency,
-            gamma=gamma,
-            tau=tau,
+            percentile=percentile,
+            episodes_to_train=episodes_to_train,
             neural_network=neural_network,
             experience_replay=experience_replay,
             writer=self.writer,
@@ -103,7 +88,7 @@ class VanillaDQN(BaseAlgorithm):
         save_path = folder / f"{env_name}_{self.algo_name}_{self.device}_{checkpoint}"
         save_path = save_path.with_suffix(".ckpt")
         model_state = {
-            "state_dict": self.agent.policy_net.state_dict(),
+            "state_dict": self.agent.net.state_dict(),
             "optimizer": self.agent.optimizer.state_dict(),
             "network_arch": self.network_arch,
             "network_type": self.network_type,
@@ -129,5 +114,5 @@ class VanillaDQN(BaseAlgorithm):
             normalize_observation=normalize_observation,
         )
 
-        self.agent.policy_net.load_state_dict(loaded_model["state_dict"])
+        self.agent.net.load_state_dict(loaded_model["state_dict"])
         self.agent.optimizer.load_state_dict(loaded_model["optimizer"])
