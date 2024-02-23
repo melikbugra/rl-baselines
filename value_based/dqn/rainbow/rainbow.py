@@ -6,25 +6,29 @@ import torch
 from utils.base_classes import BaseAlgorithm, BaseNeuralNetwork
 from utils.neural_networks import MLP, make_mlp
 
-from policy_based.cross_entropy.cross_entropy_agent import CrossEntropyAgent
-from policy_based.cross_entropy.cross_entropy_writer import CrossEntropyWriter
+from value_based.dqn.vanilla_dqn.vanilla_dqn_agent import VanillaDQNAgent
+from value_based.dqn.dqn_writer import DQNWriter
 
 
-class CrossEntropy(BaseAlgorithm):
-    algo_name: str = "Cross-Entropy"
+class Rainbow(BaseAlgorithm):
+    algo_name: str = "Vanilla-DQN"
 
     def __init__(
         self,
         env: Env,
-        percentile: int = 70,
-        episodes_to_train: int = 16,
+        epsilon_start: float = 1,
+        epsilon_end: float = 0.001,
+        exploration_percentage: float = 50,
+        gradient_steps: int = 1,
+        target_update_frequency: int = 10,
+        gamma: float = 0.99,
         # base algorithm attributes
         time_steps: int = 100000,
         learning_rate: float = 3e-4,
         network_type: str = "mlp",
         network_arch: list = [128, 128],
         experience_replay_type: str = "er",
-        experience_replay_size: int = 10000,  # It will be equal to batch size for cross entropy
+        experience_replay_size: int = 10000,
         batch_size: int = 64,
         render: bool = False,
         device: str = "cpu",
@@ -34,7 +38,7 @@ class CrossEntropy(BaseAlgorithm):
         mlflow_tracking_uri: str = None,
         normalize_observation: bool = False,
     ) -> None:
-        self.algo_name = "Cross-Entropy"
+        self.algo_name = "Vanilla-DQN"
         super().__init__(
             env=env,
             time_steps=time_steps,
@@ -50,14 +54,34 @@ class CrossEntropy(BaseAlgorithm):
             normalize_observation=normalize_observation,
         )
 
+        if mlflow_tracking_uri and self.algo_name:
+            self.mlflow_logger.define_experiment_and_run(
+                params_to_log={
+                    "time_steps": time_steps,
+                    "learning_rate": learning_rate,
+                    "network_type": network_type,
+                    "network_arch": network_arch,
+                    "experience_replay_type": experience_replay_type,
+                    "experience_replay_size": experience_replay_size,
+                    "batch_size": batch_size,
+                    "device": device,
+                    "normalize_observation": normalize_observation,
+                },
+                env=env,
+                algo_name=self.algo_name,
+            )
+
         if self.mlflow_logger.log:
             self.mlflow_logger.log_params(
                 {
-                    "percentile": percentile,
+                    "epsilon_start": epsilon_start,
+                    "epsilon_end": epsilon_end,
+                    "exploration_percentage": exploration_percentage,
+                    "gamma": gamma,
                 }
             )
 
-        self.writer: CrossEntropyWriter = CrossEntropyWriter(
+        self.writer: DQNWriter = DQNWriter(
             writing_period=writing_period,
             time_steps=time_steps,
             mlflow_logger=self.mlflow_logger,
@@ -68,10 +92,15 @@ class CrossEntropy(BaseAlgorithm):
                 env=env, network_arch=network_arch, device=device
             )
 
-        self.agent: CrossEntropyAgent = CrossEntropyAgent(
+        self.agent: VanillaDQNAgent = VanillaDQNAgent(
             env=env,
-            percentile=percentile,
-            episodes_to_train=episodes_to_train,
+            time_steps=time_steps,
+            epsilon_start=epsilon_start,
+            epsilon_end=epsilon_end,
+            exploration_percentage=exploration_percentage,
+            gradient_steps=gradient_steps,
+            target_update_frequency=target_update_frequency,
+            gamma=gamma,
             experience_replay_type=experience_replay_type,
             experience_replay_size=experience_replay_size,
             batch_size=batch_size,
@@ -87,7 +116,7 @@ class CrossEntropy(BaseAlgorithm):
         save_path = folder / f"{env_name}_{self.algo_name}_{self.device}_{checkpoint}"
         save_path = save_path.with_suffix(".ckpt")
         model_state = {
-            "state_dict": self.agent.net.state_dict(),
+            "state_dict": self.agent.policy_net.state_dict(),
             "optimizer": self.agent.optimizer.state_dict(),
             "network_arch": self.network_arch,
             "network_type": self.network_type,
@@ -113,5 +142,5 @@ class CrossEntropy(BaseAlgorithm):
             normalize_observation=normalize_observation,
         )
 
-        self.agent.net.load_state_dict(loaded_model["state_dict"])
+        self.agent.policy_net.load_state_dict(loaded_model["state_dict"])
         self.agent.optimizer.load_state_dict(loaded_model["optimizer"])

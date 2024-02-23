@@ -12,6 +12,8 @@ def make_experience_replay(
     experience_replay_size: int,
     batch_size: int,
     device: torch.device,
+    n_step: int = 1,
+    gamma: float = 0.99,
 ) -> BaseExperienceReplay:
     """Returns the experience replay
 
@@ -33,6 +35,8 @@ def make_experience_replay(
         size=experience_replay_size,
         batch_size=batch_size,
         device=device,
+        n_step=n_step,
+        gamma=gamma,
     )
 
     return experience_replay

@@ -1,7 +1,6 @@
 from copy import deepcopy
 
 from gymnasium import Env
-import numpy as np
 import random
 from torch import Tensor
 import torch
@@ -10,7 +9,6 @@ import torch.nn as nn
 
 from utils.base_classes import (
     BaseAgent,
-    BaseExperienceReplay,
     BaseNeuralNetwork,
     Transition,
 )
@@ -18,7 +16,7 @@ from value_based.dqn.dqn_writer import DQNWriter
 from utils.buffer import ExperienceReplay, make_experience_replay
 
 
-class VanillaDQNAgent(BaseAgent):
+class RainbowAgent(BaseAgent):
     def __init__(
         self,
         env: Env,
@@ -37,6 +35,8 @@ class VanillaDQNAgent(BaseAgent):
         writer: DQNWriter,
         learning_rate: float = None,
         device: str = None,
+        # rainbow attributes
+        n_step: int = 1,
     ) -> None:
         super().__init__(
             env=env,
@@ -62,7 +62,6 @@ class VanillaDQNAgent(BaseAgent):
 
         self.policy_net: BaseNeuralNetwork = neural_network
         self.target_net: BaseNeuralNetwork = deepcopy(neural_network)
-        self.target_net.eval()
 
         if experience_replay_type == "er":
             self.experience_replay: ExperienceReplay = make_experience_replay(
@@ -70,6 +69,8 @@ class VanillaDQNAgent(BaseAgent):
                 experience_replay_size=experience_replay_size,
                 batch_size=batch_size,
                 device=device,
+                n_step=n_step,
+                gamma=gamma,
             )
 
     def select_action(self, state: Tensor) -> Tensor:

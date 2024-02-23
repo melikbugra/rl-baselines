@@ -1,15 +1,17 @@
 from gymnasium import Env
 from gymnasium.spaces import Discrete, MultiDiscrete
 import numpy as np
-from utils.neural_networks.mlp import MLP
+import torch
 
+
+from utils.neural_networks.mlp import MLP
 from utils.base_classes.base_neural_network import BaseNeuralNetwork
 
 
 def make_mlp(
     env: Env,
-    network_type: str,
     network_arch: list,
+    device: torch.device,
 ) -> BaseNeuralNetwork:
     """Returns the neural network
     :return: Neural network

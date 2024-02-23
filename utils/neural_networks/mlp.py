@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
+import torch
 
 from utils.base_classes.base_neural_network import BaseNeuralNetwork
 
@@ -11,6 +12,7 @@ class MLP(BaseNeuralNetwork):
         input_neurons: int,
         network_arch: list[int],
         output_neurons: list[int] | int,
+        device: torch.device,
     ):
         super().__init__()
 
@@ -38,7 +40,8 @@ class MLP(BaseNeuralNetwork):
             for output_neuron in output_neurons:
                 self.heads.append(nn.Linear(self.layer_neuron_nums[-1], output_neuron))
 
-        self._initialize_weights()
+        # self._initialize_weights()
+        self.to(device)
 
     def forward(self, state: Tensor):
         x = state
@@ -62,6 +65,8 @@ class MLP(BaseNeuralNetwork):
     def _initialize_weights(self):
         for module in self.modules():
             if isinstance(module, nn.Linear):
-                nn.init.kaiming_uniform_(module.weight, nonlinearity="relu")
+                nn.init.xavier_uniform_(
+                    module.weight, gain=nn.init.calculate_gain("relu")
+                )
                 if module.bias is not None:
                     module.bias.data.fill_(0.0)

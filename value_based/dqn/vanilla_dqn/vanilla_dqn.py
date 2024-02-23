@@ -7,7 +7,7 @@ from utils.base_classes import BaseAlgorithm, BaseNeuralNetwork
 from utils.neural_networks import MLP, make_mlp
 
 from value_based.dqn.vanilla_dqn.vanilla_dqn_agent import VanillaDQNAgent
-from value_based.dqn.vanilla_dqn.dqn_writer import DQNWriter
+from value_based.dqn.dqn_writer import DQNWriter
 
 
 class VanillaDQN(BaseAlgorithm):
@@ -87,9 +87,10 @@ class VanillaDQN(BaseAlgorithm):
             mlflow_logger=self.mlflow_logger,
         )
 
-        neural_network: BaseNeuralNetwork = make_mlp(
-            env=env, network_type=network_type, network_arch=network_arch
-        )
+        if network_type == "mlp":
+            neural_network: MLP = make_mlp(
+                env=env, network_arch=network_arch, device=device
+            )
 
         self.agent: VanillaDQNAgent = VanillaDQNAgent(
             env=env,
