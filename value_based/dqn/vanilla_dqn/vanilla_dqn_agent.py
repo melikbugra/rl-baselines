@@ -179,14 +179,16 @@ class VanillaDQNAgent(BaseAgent):
         self.optimizer.zero_grad()
         total_loss.backward()
         # In-place gradient clipping
-        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
+        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), max_norm=1.0)
         self.optimizer.step()
 
         if time_step % self.target_update_frequency == 0:
-            target_net_state_dict = self.target_net.state_dict()
+            # target_net_state_dict = self.target_net.state_dict()
             policy_net_state_dict = self.policy_net.state_dict()
-            for key in policy_net_state_dict:
-                target_net_state_dict[key] = policy_net_state_dict[
-                    key
-                ] * self.tau + target_net_state_dict[key] * (1 - self.tau)
-            self.target_net.load_state_dict(target_net_state_dict)
+
+            # TODO: Soft update is canceled for now, continue with target update frequenc
+            # for key in policy_net_state_dict:
+            #     target_net_state_dict[key] = policy_net_state_dict[
+            #         key
+            #     ] * self.tau + target_net_state_dict[key] * (1 - self.tau)
+            self.target_net.load_state_dict(policy_net_state_dict)
