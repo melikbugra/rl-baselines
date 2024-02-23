@@ -15,6 +15,7 @@ from utils.base_classes import (
     Transition,
 )
 from value_based.dqn.vanilla_dqn.dqn_writer import DQNWriter
+from utils.buffer import ExperienceReplay, make_experience_replay
 
 
 class VanillaDQNAgent(BaseAgent):
@@ -28,10 +29,11 @@ class VanillaDQNAgent(BaseAgent):
         gradient_steps: int,
         target_update_frequency: int,
         gamma: float,
-        tau: float,
+        experience_replay_type: str,
+        experience_replay_size: int,
+        batch_size: int,
         # base agent attributes
         neural_network: BaseNeuralNetwork,
-        experience_replay: BaseExperienceReplay,
         writer: DQNWriter,
         learning_rate: float = None,
         device: str = None,
@@ -39,7 +41,6 @@ class VanillaDQNAgent(BaseAgent):
         super().__init__(
             env=env,
             neural_network=neural_network,
-            experience_replay=experience_replay,
             writer=writer,
             learning_rate=learning_rate,
             device=device,
@@ -58,10 +59,17 @@ class VanillaDQNAgent(BaseAgent):
         self.target_update_frequency = target_update_frequency
 
         self.gamma: float = gamma
-        self.tau: float = tau
 
         self.policy_net: BaseNeuralNetwork = neural_network
         self.target_net: BaseNeuralNetwork = deepcopy(neural_network)
+
+        if experience_replay_type == "er":
+            self.experience_replay: ExperienceReplay = make_experience_replay(
+                env=env,
+                experience_replay_size=experience_replay_size,
+                batch_size=batch_size,
+                device=device,
+            )
 
     def select_action(self, state: Tensor) -> Tensor:
         self.adaptive_e_greedy()
@@ -121,7 +129,8 @@ class VanillaDQNAgent(BaseAgent):
             self.update_parameters(total_loss, time_step)
 
     def get_transitions(self):
-        transitions: Transition = self.experience_replay.sample()
+        sample_tuple = self.experience_replay.sample()
+        transitions: Transition = sample_tuple[0]
 
         state_batch = transitions.state.squeeze(1)
         next_state_batch = transitions.next_state.squeeze(1)
@@ -183,12 +192,4 @@ class VanillaDQNAgent(BaseAgent):
         self.optimizer.step()
 
         if time_step % self.target_update_frequency == 0:
-            # target_net_state_dict = self.target_net.state_dict()
-            policy_net_state_dict = self.policy_net.state_dict()
-
-            # TODO: Soft update is canceled for now, continue with target update frequenc
-            # for key in policy_net_state_dict:
-            #     target_net_state_dict[key] = policy_net_state_dict[
-            #         key
-            #     ] * self.tau + target_net_state_dict[key] * (1 - self.tau)
-            self.target_net.load_state_dict(policy_net_state_dict)
+            self.target_net.load_state_dict(self.policy_net.state_dict())

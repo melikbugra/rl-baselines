@@ -4,7 +4,7 @@ from gymnasium import Env
 import torch
 
 from utils.base_classes import BaseAlgorithm, BaseNeuralNetwork
-from utils.experience_replay import ReplayMemory
+from utils.neural_networks import MLP, make_mlp
 
 from value_based.dqn.vanilla_dqn.vanilla_dqn_agent import VanillaDQNAgent
 from value_based.dqn.vanilla_dqn.dqn_writer import DQNWriter
@@ -22,7 +22,6 @@ class VanillaDQN(BaseAlgorithm):
         gradient_steps: int = 1,
         target_update_frequency: int = 10,
         gamma: float = 0.99,
-        tau: float = 0.005,
         # base algorithm attributes
         time_steps: int = 100000,
         learning_rate: float = 3e-4,
@@ -46,18 +45,31 @@ class VanillaDQN(BaseAlgorithm):
             learning_rate=learning_rate,
             network_type=network_type,
             network_arch=network_arch,
-            experience_replay_type=experience_replay_type,
-            experience_replay_size=experience_replay_size,
-            batch_size=batch_size,
             render=render,
             device=device,
             env_seed=env_seed,
             plot_train_sores=plot_train_sores,
             writing_period=writing_period,
             mlflow_tracking_uri=mlflow_tracking_uri,
-            algo_name=self.algo_name,
             normalize_observation=normalize_observation,
         )
+
+        if mlflow_tracking_uri and self.algo_name:
+            self.mlflow_logger.define_experiment_and_run(
+                params_to_log={
+                    "time_steps": time_steps,
+                    "learning_rate": learning_rate,
+                    "network_type": network_type,
+                    "network_arch": network_arch,
+                    "experience_replay_type": experience_replay_type,
+                    "experience_replay_size": experience_replay_size,
+                    "batch_size": batch_size,
+                    "device": device,
+                    "normalize_observation": normalize_observation,
+                },
+                env=env,
+                algo_name=self.algo_name,
+            )
 
         if self.mlflow_logger.log:
             self.mlflow_logger.log_params(
@@ -66,7 +78,6 @@ class VanillaDQN(BaseAlgorithm):
                     "epsilon_end": epsilon_end,
                     "exploration_percentage": exploration_percentage,
                     "gamma": gamma,
-                    "tau": tau,
                 }
             )
 
@@ -76,9 +87,9 @@ class VanillaDQN(BaseAlgorithm):
             mlflow_logger=self.mlflow_logger,
         )
 
-        neural_network: BaseNeuralNetwork = self.make_network()
-
-        experience_replay: ReplayMemory = self.make_experience_replay()
+        neural_network: BaseNeuralNetwork = make_mlp(
+            env=env, network_type=network_type, network_arch=network_arch
+        )
 
         self.agent: VanillaDQNAgent = VanillaDQNAgent(
             env=env,
@@ -89,9 +100,10 @@ class VanillaDQN(BaseAlgorithm):
             gradient_steps=gradient_steps,
             target_update_frequency=target_update_frequency,
             gamma=gamma,
-            tau=tau,
+            experience_replay_type=experience_replay_type,
+            experience_replay_size=experience_replay_size,
+            batch_size=batch_size,
             neural_network=neural_network,
-            experience_replay=experience_replay,
             writer=self.writer,
             learning_rate=learning_rate,
             device=device,

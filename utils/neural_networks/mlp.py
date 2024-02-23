@@ -38,6 +38,8 @@ class MLP(BaseNeuralNetwork):
             for output_neuron in output_neurons:
                 self.heads.append(nn.Linear(self.layer_neuron_nums[-1], output_neuron))
 
+        self._initialize_weights()
+
     def forward(self, state: Tensor):
         x = state
         for i in range(len(self.fc_list)):
@@ -56,3 +58,10 @@ class MLP(BaseNeuralNetwork):
                 sub_action_values.append(head(x))
 
             return sub_action_values
+
+    def _initialize_weights(self):
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.kaiming_uniform_(module.weight, nonlinearity="relu")
+                if module.bias is not None:
+                    module.bias.data.fill_(0.0)

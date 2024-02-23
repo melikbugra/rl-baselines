@@ -14,11 +14,10 @@ import matplotlib.pyplot as plt
 from optuna.trial import BaseTrial
 import torch
 
-from utils.base_classes.base_experience_replay import BaseExperienceReplay, Transition
+from utils.base_classes.base_experience_replay import Transition
 from utils.base_classes.base_neural_network import BaseNeuralNetwork
 from utils.base_classes.base_writer import BaseWriter
 from utils.base_classes.base_agent import BaseAgent
-from utils.experience_replay.replay_memory import ReplayMemory
 from utils.neural_networks.mlp import MLP
 from utils.mlflow_logger.mlflow_logger import MLFlowLogger
 
@@ -35,16 +34,12 @@ class BaseAlgorithm(ABC):
         learning_rate: float = 3e-4,
         network_type: str = "mlp",
         network_arch: list | str = [128, 128],
-        experience_replay_type: str = "er",
-        experience_replay_size: int = 10000,
-        batch_size: int = 64,
         render: bool = False,
         device: str = "cpu",
         env_seed: int = 42,
         plot_train_sores: bool = False,
         writing_period: int = 10000,
         mlflow_tracking_uri: str = None,
-        algo_name: str = None,
         normalize_observation: bool = False,
     ) -> None:
         self.env: Env = env
@@ -55,9 +50,6 @@ class BaseAlgorithm(ABC):
             self.network_arch: list = ast.literal_eval(network_arch)
         else:
             self.network_arch: list = network_arch
-        self.experience_replay_type: str = experience_replay_type
-        self.experience_replay_size: int = experience_replay_size
-        self.batch_size: int = batch_size
         self.render: bool = render
         self.device: str = device
         self.env_seed: int = env_seed
@@ -76,75 +68,8 @@ class BaseAlgorithm(ABC):
 
         self.mlflow_logger = MLFlowLogger(mlflow_tracking_uri)
 
-        if mlflow_tracking_uri and algo_name:
-            self.mlflow_logger.define_experiment_and_run(
-                params_to_log={
-                    "time_steps": time_steps,
-                    "learning_rate": learning_rate,
-                    "network_type": network_type,
-                    "network_arch": network_arch,
-                    "experience_replay_type": experience_replay_type,
-                    "experience_replay_size": experience_replay_size,
-                    "batch_size": batch_size,
-                    "device": device,
-                    "normalize_observation": normalize_observation,
-                },
-                env=env,
-                algo_name=algo_name,
-            )
-
         self.start_time: float
         self.models_folder: Path = Path("./models")
-
-    def make_network(self) -> BaseNeuralNetwork:
-        """Returns the neural network
-        :return: Neural network
-        :rtype: BaseNeuralNetwork
-        """
-        if isinstance(self.env.action_space, Discrete):
-            output_neurons = int(self.env.action_space.n)
-
-        elif isinstance(self.env.action_space, MultiDiscrete):
-            output_neurons = self.env.action_space.nvec.tolist()
-
-        if self.network_type == "mlp":
-            input_neurons = np.prod(self.env.observation_space.shape)
-
-            neural_network = MLP(
-                input_neurons=input_neurons,
-                network_arch=self.network_arch,
-                output_neurons=output_neurons,
-            )
-
-        return neural_network
-
-    def make_experience_replay(self) -> BaseExperienceReplay:
-        """Returns the experience replay
-
-        :raises NotImplementedError: When the experience replay type is not implemented
-        :return: The experience replay
-        :rtype: BaseExperienceReplay
-        """
-        state_dim = np.prod(self.env.observation_space.shape)
-
-        if isinstance(self.env.action_space, Discrete):
-            action_dim = 1
-
-        if isinstance(self.env.action_space, MultiDiscrete):
-            action_dim = len(self.env.action_space.nvec)
-
-        if self.experience_replay_type == "er":
-            experience_replay = ReplayMemory(
-                state_dim=state_dim,
-                action_dim=action_dim,
-                size=self.experience_replay_size,
-                batch_size=self.batch_size,
-                device=self.device,
-            )
-        elif self.experience_replay_type == "per":
-            raise NotImplementedError("PER is not implemented yet!")
-
-        return experience_replay
 
     def train(self, trial: BaseTrial = None) -> float:
         """Train the agent"""

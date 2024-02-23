@@ -4,7 +4,7 @@ from gymnasium import Env
 import torch
 
 from utils.base_classes import BaseAlgorithm, BaseNeuralNetwork
-from utils.experience_replay import ReplayMemory
+from utils.neural_networks import MLP, make_mlp
 
 from policy_based.cross_entropy.cross_entropy_agent import CrossEntropyAgent
 from policy_based.cross_entropy.cross_entropy_writer import CrossEntropyWriter
@@ -41,16 +41,12 @@ class CrossEntropy(BaseAlgorithm):
             learning_rate=learning_rate,
             network_type=network_type,
             network_arch=network_arch,
-            experience_replay_type=experience_replay_type,
-            experience_replay_size=experience_replay_size,  # experience_replay_size will be equal to batch size for cross entropy
-            batch_size=batch_size,
             render=render,
             device=device,
             env_seed=env_seed,
             plot_train_sores=plot_train_sores,
             writing_period=writing_period,
             mlflow_tracking_uri=mlflow_tracking_uri,
-            algo_name=self.algo_name,
             normalize_observation=normalize_observation,
         )
 
@@ -67,16 +63,18 @@ class CrossEntropy(BaseAlgorithm):
             mlflow_logger=self.mlflow_logger,
         )
 
-        neural_network: BaseNeuralNetwork = self.make_network()
-
-        experience_replay: ReplayMemory = self.make_experience_replay()
+        neural_network: BaseNeuralNetwork = make_mlp(
+            env=env, network_type=network_type, network_arch=network_arch
+        )
 
         self.agent: CrossEntropyAgent = CrossEntropyAgent(
             env=env,
             percentile=percentile,
             episodes_to_train=episodes_to_train,
+            experience_replay_type=experience_replay_type,
+            experience_replay_size=experience_replay_size,
+            batch_size=batch_size,
             neural_network=neural_network,
-            experience_replay=experience_replay,
             writer=self.writer,
             learning_rate=learning_rate,
             device=device,

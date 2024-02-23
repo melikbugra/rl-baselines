@@ -6,11 +6,11 @@ from policy_based.cross_entropy import CrossEntropy
 
 
 def main():
-    env = gym.make("xDrivingBump-v0", render_mode="human")
+    env = gym.make("CartPole-v0", render_mode="human")
     # model = VanillaDQN(env)
     # model.load("models/CartPole-v0_cpu_last.ckpt")
     model = VanillaDQN(env)
-    model.load("models/xDrivingBump-v0_Vanilla-DQN_cpu_best_avg.ckpt")
+    model.load("models/CartPole-v0_Vanilla-DQN_cpu_best_avg.ckpt")
     model.evaluate(render=True, print_episode_score=True)
 
 

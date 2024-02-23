@@ -17,13 +17,11 @@ class BaseAgent(ABC):
         self,
         env: Env,
         neural_network: BaseNeuralNetwork,
-        experience_replay: BaseExperienceReplay,
         writer: BaseWriter,
         learning_rate: float = 3e-4,
         device: str = "cpu",
     ) -> None:
         self.env = env
-        self.experience_replay: BaseExperienceReplay = experience_replay
         self.writer: BaseWriter = writer
 
         self.device: str = device
@@ -34,7 +32,7 @@ class BaseAgent(ABC):
 
         self.action_type: str = neural_network.action_type
         self.action_num: int = neural_network.action_num
-
+        self.experience_replay: BaseExperienceReplay
         self.steps_done: int = 0
 
     @abstractmethod

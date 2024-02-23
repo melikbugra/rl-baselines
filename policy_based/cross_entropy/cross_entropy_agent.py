@@ -15,6 +15,7 @@ from utils.base_classes import (
     Transition,
 )
 from policy_based.cross_entropy.cross_entropy_writer import CrossEntropyWriter
+from utils.buffer import ExperienceReplay, make_experience_replay
 
 
 class CrossEntropyAgent(BaseAgent):
@@ -23,9 +24,11 @@ class CrossEntropyAgent(BaseAgent):
         env: Env,
         percentile: int,
         episodes_to_train: int,
+        experience_replay_type: str,
+        experience_replay_size: int,
+        batch_size: int,
         # base agent attributes
         neural_network: BaseNeuralNetwork,
-        experience_replay: BaseExperienceReplay,
         writer: CrossEntropyWriter,
         learning_rate: float = None,
         device: str = None,
@@ -33,7 +36,6 @@ class CrossEntropyAgent(BaseAgent):
         super().__init__(
             env=env,
             neural_network=neural_network,
-            experience_replay=experience_replay,
             writer=writer,
             learning_rate=learning_rate,
             device=device,
@@ -47,6 +49,14 @@ class CrossEntropyAgent(BaseAgent):
 
         self.criterion = nn.CrossEntropyLoss()
         self.sm = nn.Softmax(dim=1)
+
+        if experience_replay_type == "er":
+            self.experience_replay: ExperienceReplay = make_experience_replay(
+                env=env,
+                experience_replay_size=experience_replay_size,
+                batch_size=batch_size,
+                device=device,
+            )
 
     def select_action(self, state: Tensor) -> Tensor:
         self.net.eval()
