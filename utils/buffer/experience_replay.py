@@ -52,9 +52,7 @@ class ExperienceReplay(BaseExperienceReplay):
             return
 
         # Calculate the n-step reward and the final state
-        n_step_reward, n_step_state, n_step_action, n_step_done = (
-            self._get_n_step_info()
-        )
+        n_step_reward, n_step_state, n_step_done = self._get_n_step_info()
 
         # Instead of storing None, store a zero tensor for terminal states
         if n_step_state is None:
@@ -62,7 +60,7 @@ class ExperienceReplay(BaseExperienceReplay):
 
         self.state_buffer[self.ptr] = self.n_step_buffer[0].state
         self.next_state_buffer[self.ptr] = n_step_state
-        self.action_buffer[self.ptr] = n_step_action
+        self.action_buffer[self.ptr] = self.n_step_buffer[0].action
         self.reward_buffer[self.ptr] = n_step_reward
         self.done_buffer[self.ptr] = n_step_done
 
@@ -114,13 +112,12 @@ class ExperienceReplay(BaseExperienceReplay):
         for i, transition in enumerate(self.n_step_buffer):
             n_step_reward += (self.gamma**i) * transition.reward
             n_step_state = transition.next_state
-            n_step_action = transition.action
             n_step_done = transition.done
 
             if transition.done:
                 break
 
-        return n_step_reward, n_step_state, n_step_action, n_step_done
+        return n_step_reward, n_step_state, n_step_done
 
     def __len__(self) -> int:
         return self.size

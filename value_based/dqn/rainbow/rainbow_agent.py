@@ -174,7 +174,7 @@ class RainbowAgent(BaseAgent):
                     1
                 )[0] * mask_batch.squeeze(1)
             expected_state_action_values: Tensor = (
-                next_state_values * self.gamma
+                next_state_values * self.gamma**self.experience_replay.n_step
             ) + reward_batch.squeeze(1)
 
             criterion = nn.SmoothL1Loss()

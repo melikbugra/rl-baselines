@@ -70,6 +70,8 @@ class VanillaDQNAgent(BaseAgent):
                 experience_replay_size=experience_replay_size,
                 batch_size=batch_size,
                 device=device,
+                n_step=2,
+                gamma=gamma,
             )
 
     def select_action(self, state: Tensor) -> Tensor:

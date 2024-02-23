@@ -6,7 +6,7 @@ import torch
 from utils.base_classes import BaseAlgorithm, BaseNeuralNetwork
 from utils.neural_networks import MLP, make_mlp
 
-from value_based.dqn.vanilla_dqn.vanilla_dqn_agent import VanillaDQNAgent
+from value_based.dqn.rainbow.rainbow_agent import RainbowAgent
 from value_based.dqn.dqn_writer import DQNWriter
 
 
@@ -22,6 +22,7 @@ class Rainbow(BaseAlgorithm):
         gradient_steps: int = 1,
         target_update_frequency: int = 10,
         gamma: float = 0.99,
+        n_step: int = 1,
         # base algorithm attributes
         time_steps: int = 100000,
         learning_rate: float = 3e-4,
@@ -38,7 +39,7 @@ class Rainbow(BaseAlgorithm):
         mlflow_tracking_uri: str = None,
         normalize_observation: bool = False,
     ) -> None:
-        self.algo_name = "Vanilla-DQN"
+        self.algo_name = "Rainbow"
         super().__init__(
             env=env,
             time_steps=time_steps,
@@ -92,7 +93,7 @@ class Rainbow(BaseAlgorithm):
                 env=env, network_arch=network_arch, device=device
             )
 
-        self.agent: VanillaDQNAgent = VanillaDQNAgent(
+        self.agent: RainbowAgent = RainbowAgent(
             env=env,
             time_steps=time_steps,
             epsilon_start=epsilon_start,
@@ -101,6 +102,7 @@ class Rainbow(BaseAlgorithm):
             gradient_steps=gradient_steps,
             target_update_frequency=target_update_frequency,
             gamma=gamma,
+            n_step=n_step,
             experience_replay_type=experience_replay_type,
             experience_replay_size=experience_replay_size,
             batch_size=batch_size,

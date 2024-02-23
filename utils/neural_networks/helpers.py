@@ -29,6 +29,7 @@ def make_mlp(
         input_neurons=input_neurons,
         network_arch=network_arch,
         output_neurons=output_neurons,
+        device=device,
     )
 
     return neural_network

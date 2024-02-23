@@ -2,7 +2,7 @@ import gymnasium as gym
 import x_driving_env
 
 from policy_based.cross_entropy import CrossEntropy
-from value_based.dqn import VanillaDQN
+from value_based.dqn import VanillaDQN, Rainbow
 
 
 def main():
@@ -20,13 +20,31 @@ def main():
     #     normalize_observation=False,
     #     network_arch=[128, 128],
     # )
-    model = VanillaDQN(
+    # model = VanillaDQN(
+    #     env=env,
+    #     time_steps=40000,
+    #     learning_rate=3e-4,
+    #     batch_size=64,
+    #     gradient_steps=1,
+    #     gamma=0.99,
+    #     experience_replay_size=10000,
+    #     render=False,
+    #     exploration_percentage=10,
+    #     target_update_frequency=100,
+    #     writing_period=1000,
+    #     plot_train_sores=True,
+    #     # mlflow_tracking_uri="http://mlflow.melikbugraozcelik.com/",
+    #     normalize_observation=False,
+    #     network_arch=[128, 128],
+    # )
+    model = Rainbow(
         env=env,
         time_steps=40000,
         learning_rate=3e-4,
         batch_size=64,
         gradient_steps=1,
         gamma=0.99,
+        n_step=5,
         experience_replay_size=10000,
         render=False,
         exploration_percentage=10,
