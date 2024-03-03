@@ -35,8 +35,10 @@ class RainbowAgent(BaseAgent):
         writer: DQNWriter,
         learning_rate: float = None,
         device: str = None,
+        gradient_clipping_max_norm: float = 1.0,
         # rainbow attributes
-        n_step: int = 1,
+        n_step: int = 3,
+        double_enabled: bool = True,
     ) -> None:
         super().__init__(
             env=env,
@@ -72,6 +74,10 @@ class RainbowAgent(BaseAgent):
                 n_step=n_step,
                 gamma=gamma,
             )
+
+        self.gradient_clipping_max_norm: float = gradient_clipping_max_norm
+
+        self.double_enabled: bool = double_enabled
 
     def select_action(self, state: Tensor) -> Tensor:
         self.adaptive_e_greedy()
@@ -166,31 +172,75 @@ class RainbowAgent(BaseAgent):
             state_action_values = self.policy_net(state_batch)[sub_action].gather(
                 1, action_batch.transpose(0, 1)[sub_action].view(-1, 1)
             )
-            next_state_values = torch.zeros(
-                self.experience_replay.batch_size, device=self.device
-            )
-            with torch.no_grad():
-                next_state_values = self.target_net(next_state_batch)[sub_action].max(
-                    1
-                )[0] * mask_batch.squeeze(1)
-            expected_state_action_values: Tensor = (
+
+            if self.double_enabled:
+                next_state_values = self.ddqn_values(
+                    sub_action, state_batch, next_state_batch, mask_batch
+                )
+            else:
+                next_state_values = self.dqn_values(
+                    sub_action, next_state_batch, mask_batch
+                )
+
+            target_state_action_values: Tensor = (
                 next_state_values * self.gamma**self.experience_replay.n_step
             ) + reward_batch.squeeze(1)
 
             criterion = nn.SmoothL1Loss()
             total_loss += criterion(
-                state_action_values, expected_state_action_values.unsqueeze(1)
+                state_action_values, target_state_action_values.unsqueeze(1)
             )
 
         self.writer.losses.append(total_loss.item())
 
         return total_loss
 
+    def dqn_values(
+        self,
+        sub_action: int,
+        next_state_batch: Tensor,
+        mask_batch: Tensor,
+    ):
+        next_state_values = torch.zeros(
+            self.experience_replay.batch_size, device=self.device
+        )
+
+        with torch.no_grad():
+            next_state_values = self.target_net(next_state_batch)[sub_action].max(1)[
+                0
+            ] * mask_batch.squeeze(1)
+
+        return next_state_values
+
+    def ddqn_values(
+        self,
+        sub_action: int,
+        state_batch: Tensor,
+        next_state_batch: Tensor,
+        mask_batch: Tensor,
+    ):
+        selected_action = self.policy_net(state_batch)[sub_action].argmax(
+            dim=1, keepdim=True
+        )
+
+        next_state_values = torch.zeros(
+            self.experience_replay.batch_size, device=self.device
+        )
+
+        with torch.no_grad():
+            next_state_values = self.target_net(next_state_batch)[sub_action].gather(
+                1, selected_action
+            ).squeeze(1) * mask_batch.squeeze(1)
+
+        return next_state_values
+
     def update_parameters(self, total_loss: Tensor, time_step: int):
         self.optimizer.zero_grad()
         total_loss.backward()
         # In-place gradient clipping
-        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(
+            self.policy_net.parameters(), max_norm=self.gradient_clipping_max_norm
+        )
         self.optimizer.step()
 
         if time_step % self.target_update_frequency == 0:

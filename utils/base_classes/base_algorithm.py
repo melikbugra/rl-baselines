@@ -41,6 +41,7 @@ class BaseAlgorithm(ABC):
         writing_period: int = 10000,
         mlflow_tracking_uri: str = None,
         normalize_observation: bool = False,
+        gradient_clipping_max_norm: float = 1.0,
     ) -> None:
         self.env: Env = env
         self.time_steps: int = time_steps
@@ -58,6 +59,8 @@ class BaseAlgorithm(ABC):
         self.normalize_observation: bool = normalize_observation
         if normalize_observation:
             self.env = normalize.NormalizeObservation(env)
+
+        self.gradient_clipping_max_norm: float = gradient_clipping_max_norm
 
         self.algo_name: str
 

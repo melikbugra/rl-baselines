@@ -22,7 +22,6 @@ class Rainbow(BaseAlgorithm):
         gradient_steps: int = 1,
         target_update_frequency: int = 10,
         gamma: float = 0.99,
-        n_step: int = 1,
         # base algorithm attributes
         time_steps: int = 100000,
         learning_rate: float = 3e-4,
@@ -38,6 +37,10 @@ class Rainbow(BaseAlgorithm):
         writing_period: int = 10000,
         mlflow_tracking_uri: str = None,
         normalize_observation: bool = False,
+        gradient_clipping_max_norm: float = 1.0,
+        # rainbow
+        n_step: int = 1,
+        double_enabled: bool = True,
     ) -> None:
         self.algo_name = "Rainbow"
         super().__init__(
@@ -53,6 +56,7 @@ class Rainbow(BaseAlgorithm):
             writing_period=writing_period,
             mlflow_tracking_uri=mlflow_tracking_uri,
             normalize_observation=normalize_observation,
+            gradient_clipping_max_norm=gradient_clipping_max_norm,
         )
 
         if mlflow_tracking_uri and self.algo_name:
@@ -102,7 +106,6 @@ class Rainbow(BaseAlgorithm):
             gradient_steps=gradient_steps,
             target_update_frequency=target_update_frequency,
             gamma=gamma,
-            n_step=n_step,
             experience_replay_type=experience_replay_type,
             experience_replay_size=experience_replay_size,
             batch_size=batch_size,
@@ -110,6 +113,9 @@ class Rainbow(BaseAlgorithm):
             writer=self.writer,
             learning_rate=learning_rate,
             device=device,
+            gradient_clipping_max_norm=gradient_clipping_max_norm,
+            n_step=n_step,
+            double_enabled=double_enabled,
         )
 
     def save(self, folder: str, checkpoint=""):

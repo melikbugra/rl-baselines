@@ -33,6 +33,7 @@ class CrossEntropy(BaseAlgorithm):
         writing_period: int = 10000,
         mlflow_tracking_uri: str = None,
         normalize_observation: bool = False,
+        gradient_clipping_max_norm: float = 1.0,
     ) -> None:
         self.algo_name = "Cross-Entropy"
         super().__init__(
@@ -48,6 +49,7 @@ class CrossEntropy(BaseAlgorithm):
             writing_period=writing_period,
             mlflow_tracking_uri=mlflow_tracking_uri,
             normalize_observation=normalize_observation,
+            gradient_clipping_max_norm=gradient_clipping_max_norm,
         )
 
         if self.mlflow_logger.log:
@@ -79,6 +81,7 @@ class CrossEntropy(BaseAlgorithm):
             writer=self.writer,
             learning_rate=learning_rate,
             device=device,
+            gradient_clipping_max_norm=gradient_clipping_max_norm,
         )
 
     def save(self, folder: str, checkpoint=""):

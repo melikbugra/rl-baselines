@@ -37,6 +37,7 @@ class VanillaDQNAgent(BaseAgent):
         writer: DQNWriter,
         learning_rate: float = None,
         device: str = None,
+        gradient_clipping_max_norm: float = 1.0,
     ) -> None:
         super().__init__(
             env=env,
@@ -73,6 +74,8 @@ class VanillaDQNAgent(BaseAgent):
                 n_step=2,
                 gamma=gamma,
             )
+
+        self.gradient_clipping_max_norm: float = gradient_clipping_max_norm
 
     def select_action(self, state: Tensor) -> Tensor:
         self.adaptive_e_greedy()
@@ -174,13 +177,13 @@ class VanillaDQNAgent(BaseAgent):
                 next_state_values = self.target_net(next_state_batch)[sub_action].max(
                     1
                 )[0] * mask_batch.squeeze(1)
-            expected_state_action_values: Tensor = (
+            target_state_action_values: Tensor = (
                 next_state_values * self.gamma
             ) + reward_batch.squeeze(1)
 
             criterion = nn.SmoothL1Loss()
             total_loss += criterion(
-                state_action_values, expected_state_action_values.unsqueeze(1)
+                state_action_values, target_state_action_values.unsqueeze(1)
             )
 
         self.writer.losses.append(total_loss.item())
@@ -191,7 +194,9 @@ class VanillaDQNAgent(BaseAgent):
         self.optimizer.zero_grad()
         total_loss.backward()
         # In-place gradient clipping
-        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(
+            self.policy_net.parameters(), max_norm=self.gradient_clipping_max_norm
+        )
         self.optimizer.step()
 
         if time_step % self.target_update_frequency == 0:

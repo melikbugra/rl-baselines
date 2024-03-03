@@ -32,6 +32,7 @@ class CrossEntropyAgent(BaseAgent):
         writer: CrossEntropyWriter,
         learning_rate: float = None,
         device: str = None,
+        gradient_clipping_max_norm: float = 1.0,
     ) -> None:
         super().__init__(
             env=env,
@@ -57,6 +58,8 @@ class CrossEntropyAgent(BaseAgent):
                 batch_size=batch_size,
                 device=device,
             )
+
+        self.gradient_clipping_max_norm: float = gradient_clipping_max_norm
 
     def select_action(self, state: Tensor) -> Tensor:
         self.net.eval()
@@ -199,5 +202,7 @@ class CrossEntropyAgent(BaseAgent):
         self.optimizer.zero_grad()
         total_loss.backward()
         # In-place gradient clipping
-        torch.nn.utils.clip_grad_value_(self.net.parameters(), 100)
+        torch.nn.utils.clip_grad_norm_(
+            self.net.parameters(), max_norm=self.gradient_clipping_max_norm
+        )
         self.optimizer.step()

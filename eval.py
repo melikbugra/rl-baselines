@@ -10,7 +10,7 @@ def main():
     # model = VanillaDQN(env)
     # model.load("models/CartPole-v0_cpu_last.ckpt")
     model = Rainbow(env)
-    model.load("models/CartPole-v0_Vanilla-DQN_cpu_best_avg.ckpt")
+    model.load("models/CartPole-v0_Rainbow_cpu_last.ckpt")
     model.evaluate(render=True, print_episode_score=True)
 
 

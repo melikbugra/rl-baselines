@@ -37,6 +37,7 @@ class VanillaDQN(BaseAlgorithm):
         writing_period: int = 10000,
         mlflow_tracking_uri: str = None,
         normalize_observation: bool = False,
+        gradient_clipping_max_norm: float = 1.0,
     ) -> None:
         self.algo_name = "Vanilla-DQN"
         super().__init__(
@@ -52,6 +53,7 @@ class VanillaDQN(BaseAlgorithm):
             writing_period=writing_period,
             mlflow_tracking_uri=mlflow_tracking_uri,
             normalize_observation=normalize_observation,
+            gradient_clipping_max_norm=gradient_clipping_max_norm,
         )
 
         if mlflow_tracking_uri and self.algo_name:
@@ -108,6 +110,7 @@ class VanillaDQN(BaseAlgorithm):
             writer=self.writer,
             learning_rate=learning_rate,
             device=device,
+            gradient_clipping_max_norm=gradient_clipping_max_norm,
         )
 
     def save(self, folder: str, checkpoint=""):
