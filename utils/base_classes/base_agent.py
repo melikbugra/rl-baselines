@@ -34,7 +34,7 @@ class BaseAgent(ABC):
         )
 
         self.action_type: str = neural_network.action_type
-        self.action_num: int = neural_network.action_num
+        self.action_dim: int = neural_network.action_dim
         self.experience_replay: BaseExperienceReplay
         self.steps_done: int = 0
 

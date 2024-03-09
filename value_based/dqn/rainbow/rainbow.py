@@ -4,7 +4,7 @@ from gymnasium import Env
 import torch
 
 from utils.base_classes import BaseAlgorithm, BaseNeuralNetwork
-from utils.neural_networks import MLP, make_mlp
+from utils.neural_networks import MLP, make_mlp, CNN, make_cnn
 
 from value_based.dqn.rainbow.rainbow_agent import RainbowAgent
 from value_based.dqn.dqn_writer import DQNWriter
@@ -96,6 +96,8 @@ class Rainbow(BaseAlgorithm):
             neural_network: MLP = make_mlp(
                 env=env, network_arch=network_arch, device=device
             )
+        elif network_type == "cnn":
+            neural_network: CNN = make_cnn(env=env, device=device)
 
         self.agent: RainbowAgent = RainbowAgent(
             env=env,
@@ -121,6 +123,7 @@ class Rainbow(BaseAlgorithm):
     def save(self, folder: str, checkpoint=""):
         env_name = self.env.spec.id
         folder: Path = Path(folder)
+        env_name = env_name.replace("/", "_")
         save_path = folder / f"{env_name}_{self.algo_name}_{self.device}_{checkpoint}"
         save_path = save_path.with_suffix(".ckpt")
         model_state = {

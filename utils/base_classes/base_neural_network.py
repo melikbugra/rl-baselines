@@ -10,7 +10,8 @@ class BaseNeuralNetwork(nn.Module, ABC):
         super().__init__()
 
         self.action_type: str
-        self.action_num: int
+        self.action_dim: int
+        self.network_type: str
 
     def __call__(self, *args: Any, **kwds: Any) -> Tensor:
         return super().__call__(*args, **kwds)

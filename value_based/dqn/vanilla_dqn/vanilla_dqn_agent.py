@@ -73,6 +73,7 @@ class VanillaDQNAgent(BaseAgent):
                 device=device,
                 n_step=2,
                 gamma=gamma,
+                network_type=self.policy_net.network_type,
             )
 
         self.gradient_clipping_max_norm: float = gradient_clipping_max_norm
@@ -108,7 +109,7 @@ class VanillaDQNAgent(BaseAgent):
         # second column on max result is index of where max element was
         # found, so we pick action with the larger expected reward.
         decoded_batch_actions = []
-        for dim in range(self.action_num):
+        for dim in range(self.action_dim):
             max_valued_sub_action: Tensor = nn_action_values[dim].max(1)[1]
 
             decoded_batch_actions.append(max_valued_sub_action.view(1, 1).item())
@@ -166,7 +167,7 @@ class VanillaDQNAgent(BaseAgent):
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
         # for each batch state according to policy_net
-        for sub_action in range(self.action_num):
+        for sub_action in range(self.action_dim):
             state_action_values = self.policy_net(state_batch)[sub_action].gather(
                 1, action_batch.transpose(0, 1)[sub_action].view(-1, 1)
             )

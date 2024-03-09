@@ -16,6 +16,8 @@ class MLP(BaseNeuralNetwork):
     ):
         super().__init__()
 
+        self.network_type: str = "mlp"
+
         fc_num = len(network_arch)
 
         self.layer_neuron_nums: list[int] = [input_neurons] + network_arch
@@ -29,12 +31,12 @@ class MLP(BaseNeuralNetwork):
 
         if isinstance(output_neurons, int):
             self.action_type = "discrete"
-            self.action_num = 1
+            self.action_dim = 1
             self.head = nn.Linear(self.layer_neuron_nums[-1], output_neurons)
 
         elif isinstance(output_neurons, list):
             self.action_type = "multidiscrete"
-            self.action_num = len(output_neurons)
+            self.action_dim = len(output_neurons)
 
             self.heads: list[nn.Linear] = []
             for output_neuron in output_neurons:

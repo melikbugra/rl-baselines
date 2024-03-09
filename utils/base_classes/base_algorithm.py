@@ -20,6 +20,7 @@ from utils.base_classes.base_writer import BaseWriter
 from utils.base_classes.base_agent import BaseAgent
 from utils.neural_networks.mlp import MLP
 from utils.mlflow_logger.mlflow_logger import MLFlowLogger
+from common.env_wrappers import make_atari_env
 
 
 class BaseAlgorithm(ABC):
@@ -74,6 +75,14 @@ class BaseAlgorithm(ABC):
         self.start_time: float
         self.models_folder: Path = Path("./models")
 
+        self.atari_envs: list[str] = [
+            "PongNoFrameskip-v4",
+            "BowlingNoFrameskip-v4",
+            "ALE/MarioBros-v5",
+            "TennisNoFrameskip-v4",
+            "SkiingNoFrameskip-v4",
+        ]
+
     def train(self, trial: BaseTrial = None) -> float:
         """Train the agent"""
         self.start_time = time.perf_counter()
@@ -115,16 +124,24 @@ class BaseAlgorithm(ABC):
         episodes: int = 10,
         print_episode_score: bool = False,
     ):
-        if render:
-            eval_env: Env = gym.make(self.env.spec.id, render_mode="human")
+        if self.env.spec.id in self.atari_envs:
+            if render:
+                eval_env: Env = make_atari_env(self.env.spec.id, render_mode="human")
+            else:
+                eval_env: Env = make_atari_env(self.env.spec.id)
+            if self.normalize_observation:
+                eval_env = normalize.NormalizeObservation(eval_env)
         else:
-            eval_env: Env = gym.make(self.env.spec.id)
-        if self.normalize_observation:
-            eval_env = normalize.NormalizeObservation(eval_env)
+            if render:
+                eval_env: Env = gym.make(self.env.spec.id, render_mode="human")
+            else:
+                eval_env: Env = gym.make(self.env.spec.id)
+            if self.normalize_observation:
+                eval_env = normalize.NormalizeObservation(eval_env)
 
         episode_scores = []
         for _ in range(episodes):
-            state, _ = eval_env.reset(seed=self.env_seed)
+            state, _ = eval_env.reset(seed=np.random.randint(0, 100))
             state = self.state_to_torch(state)
 
             episode_score = 0
@@ -222,11 +239,16 @@ class BaseAlgorithm(ABC):
                 episode_score = 0
 
     def state_to_torch(self, state: np.ndarray):
-        return (
-            torch.tensor(state, dtype=torch.float32, device=self.device)
-            .unsqueeze(0)
-            .view(1, -1)
-        )
+        if self.network_type == "mlp":
+            return (
+                torch.tensor(state, dtype=torch.float32, device=self.device)
+                .unsqueeze(0)
+                .view(1, -1)
+            )
+        elif self.network_type == "cnn":
+            return torch.tensor(
+                state, dtype=torch.float32, device=self.device
+            ).unsqueeze(0)
 
     def plot_scores(self, show_result=False) -> None:
         """Plot scores with an running average

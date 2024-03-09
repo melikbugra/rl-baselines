@@ -14,6 +14,7 @@ def make_experience_replay(
     device: torch.device,
     n_step: int = 1,
     gamma: float = 0.99,
+    network_type: str = "mlp",
 ) -> BaseExperienceReplay:
     """Returns the experience replay
 
@@ -21,7 +22,10 @@ def make_experience_replay(
     :return: The experience replay
     :rtype: BaseExperienceReplay
     """
-    state_dim = np.prod(env.observation_space.shape)
+    if network_type == "mlp":
+        state_dim = np.prod(env.observation_space.shape)
+    elif network_type == "cnn":
+        state_dim = env.observation_space.shape
 
     if isinstance(env.action_space, Discrete):
         action_dim = 1

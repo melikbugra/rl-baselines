@@ -20,8 +20,11 @@ class ExperienceReplay(BaseExperienceReplay):
         n_step: int = 1,
         gamma: float = 0.99,
     ):
+        if type(state_dim) == int:
+            state_dim = [state_dim]
+
         self.state_buffer: Tensor = torch.zeros(
-            [size, 1, state_dim], dtype=torch.float32, device=device
+            [size, 1, *state_dim], dtype=torch.float32, device=device
         )
         # Use None as a placeholder for next_state (next state is None if the episode is terminated)
         self.next_state_buffer: Tensor = [None] * size

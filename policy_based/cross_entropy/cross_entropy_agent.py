@@ -57,6 +57,7 @@ class CrossEntropyAgent(BaseAgent):
                 experience_replay_size=experience_replay_size,
                 batch_size=batch_size,
                 device=device,
+                network_type=self.net.network_type,
             )
 
         self.gradient_clipping_max_norm: float = gradient_clipping_max_norm
@@ -87,7 +88,7 @@ class CrossEntropyAgent(BaseAgent):
         # second column on max result is index of where max element was
         # found, so we pick action with the larger expected reward.
         decoded_batch_actions = []
-        for dim in range(self.action_num):
+        for dim in range(self.action_dim):
             max_valued_sub_action: Tensor = nn_action_values[dim].max(1)[1]
 
             decoded_batch_actions.append(max_valued_sub_action.view(1, 1).item())
@@ -190,7 +191,7 @@ class CrossEntropyAgent(BaseAgent):
     ) -> Tensor:
         total_loss: Tensor = 0
 
-        for sub_action in range(self.action_num):
+        for sub_action in range(self.action_dim):
             action_probs = self.net(state_batch)[sub_action]
             total_loss = self.criterion(action_probs, action_batch.squeeze())
 
