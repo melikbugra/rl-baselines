@@ -39,6 +39,7 @@ class RainbowAgent(BaseAgent):
         # rainbow attributes
         n_step: int = 3,
         double_enabled: bool = True,
+        noisy_enabled: bool = True,
     ) -> None:
         super().__init__(
             env=env,
@@ -49,13 +50,14 @@ class RainbowAgent(BaseAgent):
         )
         self.writer: DQNWriter = writer
 
-        self.epsilon_end: float = epsilon_end
-        self.epsilon: float = epsilon_start
-        self.epsilon_decay: float = (
-            (self.epsilon - self.epsilon_end)
-            * 100
-            / (time_steps * (exploration_percentage + 1))
-        )
+        if not noisy_enabled:
+            self.epsilon_end: float = epsilon_end
+            self.epsilon: float = epsilon_start
+            self.epsilon_decay: float = (
+                (self.epsilon - self.epsilon_end)
+                * 100
+                / (time_steps * (exploration_percentage + 1))
+            )
 
         self.gradient_steps: int = gradient_steps
         self.target_update_frequency = target_update_frequency
@@ -79,16 +81,20 @@ class RainbowAgent(BaseAgent):
         self.gradient_clipping_max_norm: float = gradient_clipping_max_norm
 
         self.double_enabled: bool = double_enabled
+        self.noisy_enabled: bool = noisy_enabled
 
     def select_action(self, state: Tensor) -> Tensor:
-        self.adaptive_e_greedy()
-
-        sample = random.uniform(0, 1)
-        self.steps_done += 1
-        if sample > self.epsilon:
+        if self.noisy_enabled:
             return self.select_greedy_action(state)
         else:
-            return self.select_random_action()
+            self.adaptive_e_greedy()
+
+            sample = random.uniform(0, 1)
+            self.steps_done += 1
+            if sample > self.epsilon:
+                return self.select_greedy_action(state)
+            else:
+                return self.select_random_action()
 
     def select_greedy_action(self, state: Tensor) -> Tensor:
         self.policy_net.eval()
@@ -246,3 +252,8 @@ class RainbowAgent(BaseAgent):
 
         if time_step % self.target_update_frequency == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
+
+        if self.noisy_enabled:
+            # Noisy reset noise
+            self.policy_net.reset_noise()
+            self.target_net.reset_noise()

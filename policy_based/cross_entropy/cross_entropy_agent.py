@@ -67,7 +67,7 @@ class CrossEntropyAgent(BaseAgent):
         with torch.no_grad():
             if self.net.action_type == "discrete":
                 act_probs_v = self.sm(self.net(state)[0])
-                act_probs = act_probs_v.data.numpy()[0]
+                act_probs = act_probs_v.data.cpu().numpy()[0]
                 return torch.tensor(
                     np.random.choice(len(act_probs), p=act_probs),
                     device=self.device,

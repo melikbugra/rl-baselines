@@ -20,7 +20,7 @@ class ExperienceReplay(BaseExperienceReplay):
         n_step: int = 1,
         gamma: float = 0.99,
     ):
-        if type(state_dim) == int:
+        if type(state_dim) == int or type(state_dim) == np.int64:
             state_dim = [state_dim]
 
         self.state_buffer: Tensor = torch.zeros(

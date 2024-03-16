@@ -41,6 +41,7 @@ class Rainbow(BaseAlgorithm):
         # rainbow
         n_step: int = 1,
         double_enabled: bool = True,
+        noisy_enabled: bool = True,
     ) -> None:
         self.algo_name = "Rainbow"
         super().__init__(
@@ -77,27 +78,41 @@ class Rainbow(BaseAlgorithm):
             )
 
         if self.mlflow_logger.log:
-            self.mlflow_logger.log_params(
-                {
-                    "epsilon_start": epsilon_start,
-                    "epsilon_end": epsilon_end,
-                    "exploration_percentage": exploration_percentage,
-                    "gamma": gamma,
-                }
-            )
+            if noisy_enabled:
+                self.mlflow_logger.log_params(
+                    {
+                        "exploration_percentage": exploration_percentage,
+                        "gamma": gamma,
+                    }
+                )
+            else:
+                self.mlflow_logger.log_params(
+                    {
+                        "epsilon_start": epsilon_start,
+                        "epsilon_end": epsilon_end,
+                        "exploration_percentage": exploration_percentage,
+                        "gamma": gamma,
+                    }
+                )
 
         self.writer: DQNWriter = DQNWriter(
             writing_period=writing_period,
             time_steps=time_steps,
             mlflow_logger=self.mlflow_logger,
+            noisy_enabled=noisy_enabled,
         )
 
         if network_type == "mlp":
             neural_network: MLP = make_mlp(
-                env=env, network_arch=network_arch, device=device
+                env=env,
+                network_arch=network_arch,
+                device=device,
+                noisy_enabled=noisy_enabled,
             )
         elif network_type == "cnn":
-            neural_network: CNN = make_cnn(env=env, device=device)
+            neural_network: CNN = make_cnn(
+                env=env, device=device, noisy_enabled=noisy_enabled
+            )
 
         self.agent: RainbowAgent = RainbowAgent(
             env=env,
@@ -118,6 +133,7 @@ class Rainbow(BaseAlgorithm):
             gradient_clipping_max_norm=gradient_clipping_max_norm,
             n_step=n_step,
             double_enabled=double_enabled,
+            noisy_enabled=noisy_enabled,
         )
 
     def save(self, folder: str, checkpoint=""):

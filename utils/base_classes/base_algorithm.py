@@ -20,7 +20,7 @@ from utils.base_classes.base_writer import BaseWriter
 from utils.base_classes.base_agent import BaseAgent
 from utils.neural_networks.mlp import MLP
 from utils.mlflow_logger.mlflow_logger import MLFlowLogger
-from common.env_wrappers import make_atari_env
+from common.env_wrappers import make_atari_env, make_box2d_viz_env
 
 
 class BaseAlgorithm(ABC):
@@ -83,6 +83,8 @@ class BaseAlgorithm(ABC):
             "SkiingNoFrameskip-v4",
         ]
 
+        self.box_2d_viz_envs: list[str] = ["CarRacing-v2"]
+
     def train(self, trial: BaseTrial = None) -> float:
         """Train the agent"""
         self.start_time = time.perf_counter()
@@ -129,6 +131,15 @@ class BaseAlgorithm(ABC):
                 eval_env: Env = make_atari_env(self.env.spec.id, render_mode="human")
             else:
                 eval_env: Env = make_atari_env(self.env.spec.id)
+            if self.normalize_observation:
+                eval_env = normalize.NormalizeObservation(eval_env)
+        elif self.env.spec.id in self.box_2d_viz_envs:
+            if render:
+                eval_env: Env = make_box2d_viz_env(
+                    self.env.spec.id, render_mode="human", continuous=False
+                )
+            else:
+                eval_env: Env = make_box2d_viz_env(self.env.spec.id, continuous=False)
             if self.normalize_observation:
                 eval_env = normalize.NormalizeObservation(eval_env)
         else:

@@ -7,7 +7,11 @@ from utils.mlflow_logger import MLFlowLogger
 
 class DQNWriter(BaseWriter):
     def __init__(
-        self, writing_period: int, time_steps: int, mlflow_logger: MLFlowLogger
+        self,
+        writing_period: int,
+        time_steps: int,
+        mlflow_logger: MLFlowLogger,
+        noisy_enabled: bool = False,
     ) -> None:
         super().__init__(
             writing_period=writing_period,
@@ -15,19 +19,29 @@ class DQNWriter(BaseWriter):
             mlflow_logger=mlflow_logger,
         )
 
-        self.table.field_names = [
-            "Time Step",
-            "Epsilon",
-            "Average Loss",
-            "Average Train Score",
-            "Average Evaluation Score",
-            "Time Elapsed (s)",
-        ]
+        if noisy_enabled:
+            self.table.field_names = [
+                "Time Step",
+                "Average Loss",
+                "Average Train Score",
+                "Average Evaluation Score",
+                "Time Elapsed (s)",
+            ]
+        else:
+            self.table.field_names = [
+                "Time Step",
+                "Epsilon",
+                "Average Loss",
+                "Average Train Score",
+                "Average Evaluation Score",
+                "Time Elapsed (s)",
+            ]
 
         self.losses: list[float] = []
 
         self.avg_loss: float = 0.0
         self.epsilon: float = 0.0
+        self.noisy_enabled: bool = noisy_enabled
 
     def reset(self, time_step: int):
         super().reset(time_step)
@@ -46,13 +60,24 @@ class DQNWriter(BaseWriter):
         )
 
     def add_row_to_table(self):
-        self.table.add_row(
-            [
-                f"{self.time_step}/{self.time_steps}",
-                f"{self.epsilon:.4f}",
-                f"{self.avg_loss:.4f}",
-                f"{self.avg_train_score:.2f}",
-                f"{self.avg_eval_score:.2f}",
-                f"{self.time_elapsed:.2f}",
-            ]
-        )
+        if self.noisy_enabled:
+            self.table.add_row(
+                [
+                    f"{self.time_step}/{self.time_steps}",
+                    f"{self.avg_loss:.4f}",
+                    f"{self.avg_train_score:.2f}",
+                    f"{self.avg_eval_score:.2f}",
+                    f"{self.time_elapsed:.2f}",
+                ]
+            )
+        else:
+            self.table.add_row(
+                [
+                    f"{self.time_step}/{self.time_steps}",
+                    f"{self.epsilon:.4f}",
+                    f"{self.avg_loss:.4f}",
+                    f"{self.avg_train_score:.2f}",
+                    f"{self.avg_eval_score:.2f}",
+                    f"{self.time_elapsed:.2f}",
+                ]
+            )

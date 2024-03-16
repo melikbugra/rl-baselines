@@ -4,7 +4,7 @@ from gymnasium import Env
 import torch
 
 from utils.base_classes import BaseAlgorithm, BaseNeuralNetwork
-from utils.neural_networks import MLP, make_mlp
+from utils.neural_networks import MLP, make_mlp, CNN, make_cnn
 
 from policy_based.cross_entropy.cross_entropy_agent import CrossEntropyAgent
 from policy_based.cross_entropy.cross_entropy_writer import CrossEntropyWriter
@@ -69,6 +69,8 @@ class CrossEntropy(BaseAlgorithm):
             neural_network: MLP = make_mlp(
                 env=env, network_arch=network_arch, device=device
             )
+        elif network_type == "cnn":
+            neural_network: CNN = make_cnn(env=env, device=device)
 
         self.agent: CrossEntropyAgent = CrossEntropyAgent(
             env=env,
