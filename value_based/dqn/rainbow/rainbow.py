@@ -80,22 +80,14 @@ class Rainbow(BaseAlgorithm):
             )
 
         if self.mlflow_logger.log:
-            if noisy_enabled:
-                self.mlflow_logger.log_params(
-                    {
-                        "exploration_percentage": exploration_percentage,
-                        "gamma": gamma,
-                    }
-                )
-            else:
-                self.mlflow_logger.log_params(
-                    {
-                        "epsilon_start": epsilon_start,
-                        "epsilon_end": epsilon_end,
-                        "exploration_percentage": exploration_percentage,
-                        "gamma": gamma,
-                    }
-                )
+            self.mlflow_logger.log_params(
+                {
+                    "epsilon_start": epsilon_start,
+                    "epsilon_end": epsilon_end,
+                    "exploration_percentage": exploration_percentage,
+                    "gamma": gamma,
+                }
+            )
 
         self.writer: DQNWriter = DQNWriter(
             writing_period=writing_period,

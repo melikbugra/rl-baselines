@@ -19,23 +19,14 @@ class DQNWriter(BaseWriter):
             mlflow_logger=mlflow_logger,
         )
 
-        if noisy_enabled:
-            self.table.field_names = [
-                "Time Step",
-                "Average Loss",
-                "Average Train Score",
-                "Average Evaluation Score",
-                "Time Elapsed (s)",
-            ]
-        else:
-            self.table.field_names = [
-                "Time Step",
-                "Epsilon",
-                "Average Loss",
-                "Average Train Score",
-                "Average Evaluation Score",
-                "Time Elapsed (s)",
-            ]
+        self.table.field_names = [
+            "Time Step",
+            "Epsilon",
+            "Average Loss",
+            "Average Train Score",
+            "Average Evaluation Score",
+            "Time Elapsed (s)",
+        ]
 
         self.losses: list[float] = []
 
@@ -60,24 +51,13 @@ class DQNWriter(BaseWriter):
         )
 
     def add_row_to_table(self):
-        if self.noisy_enabled:
-            self.table.add_row(
-                [
-                    f"{self.time_step}/{self.time_steps}",
-                    f"{self.avg_loss:.4f}",
-                    f"{self.avg_train_score:.2f}",
-                    f"{self.avg_eval_score:.2f}",
-                    f"{self.time_elapsed:.2f}",
-                ]
-            )
-        else:
-            self.table.add_row(
-                [
-                    f"{self.time_step}/{self.time_steps}",
-                    f"{self.epsilon:.4f}",
-                    f"{self.avg_loss:.4f}",
-                    f"{self.avg_train_score:.2f}",
-                    f"{self.avg_eval_score:.2f}",
-                    f"{self.time_elapsed:.2f}",
-                ]
-            )
+        self.table.add_row(
+            [
+                f"{self.time_step}/{self.time_steps}",
+                f"{self.epsilon:.4f}",
+                f"{self.avg_loss:.4f}",
+                f"{self.avg_train_score:.2f}",
+                f"{self.avg_eval_score:.2f}",
+                f"{self.time_elapsed:.2f}",
+            ]
+        )

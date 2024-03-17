@@ -64,14 +64,13 @@ class RainbowAgent(BaseAgent):
         self.per_enabled: bool = True if experience_replay_type == "per" else False
         self.experience_replay_type = experience_replay_type
 
-        if not noisy_enabled:
-            self.epsilon_end: float = epsilon_end
-            self.epsilon: float = epsilon_start
-            self.epsilon_decay: float = (
-                (self.epsilon - self.epsilon_end)
-                * 100
-                / (time_steps * (exploration_percentage + 1))
-            )
+        self.epsilon_end: float = epsilon_end
+        self.epsilon: float = epsilon_start
+        self.epsilon_decay: float = (
+            (self.epsilon - self.epsilon_end)
+            * 100
+            / (time_steps * (exploration_percentage + 1))
+        )
 
         self.gradient_steps: int = gradient_steps
         self.target_update_frequency = target_update_frequency
@@ -114,17 +113,14 @@ class RainbowAgent(BaseAgent):
         if self.per_enabled:
             self.adaptive_per_beta()
 
-        if self.noisy_enabled:
+        self.adaptive_e_greedy()
+
+        sample = random.uniform(0, 1)
+        self.steps_done += 1
+        if sample > self.epsilon:
             return self.select_greedy_action(state)
         else:
-            self.adaptive_e_greedy()
-
-            sample = random.uniform(0, 1)
-            self.steps_done += 1
-            if sample > self.epsilon:
-                return self.select_greedy_action(state)
-            else:
-                return self.select_random_action()
+            return self.select_random_action()
 
     def select_greedy_action(self, state: Tensor, eval: bool = False) -> Tensor:
         if eval:

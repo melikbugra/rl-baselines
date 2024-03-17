@@ -9,7 +9,7 @@ import davshan_env
 
 
 def main():
-    env = gym.make("CartPole-v1")
+    env = gym.make("CartPole-v0")
     # env = make_atari_env("PongNoFrameskip-v4")
     # env = make_box2d_viz_env("CarRacing-v2", continuous=False)
     # env.reset()
@@ -49,14 +49,14 @@ def main():
     # )
     model = Rainbow(
         env=env,
-        time_steps=90000,
+        time_steps=20000,
         learning_rate=3e-4,
         batch_size=32,
         gradient_steps=1,
         gamma=0.99,
         experience_replay_size=20000,
         render=False,
-        exploration_percentage=40,
+        exploration_percentage=1,
         target_update_frequency=1000,
         writing_period=1000,
         plot_train_sores=True,
@@ -68,7 +68,7 @@ def main():
         device="cpu",
         n_step=3,
         double_enabled=True,
-        noisy_enabled=False,
+        noisy_enabled=True,
         experience_replay_type="per",
         env_seed=99,
     )
