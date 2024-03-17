@@ -15,7 +15,7 @@ from utils.base_classes import (
     Transition,
 )
 from policy_based.cross_entropy.cross_entropy_writer import CrossEntropyWriter
-from utils.buffer import ExperienceReplay, make_experience_replay
+from utils.replay_buffers import ExperienceReplay, make_experience_replay
 
 
 class CrossEntropyAgent(BaseAgent):

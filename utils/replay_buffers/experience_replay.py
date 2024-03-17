@@ -20,6 +20,7 @@ class ExperienceReplay(BaseExperienceReplay):
         n_step: int = 1,
         gamma: float = 0.99,
     ):
+        self.device = device
         if type(state_dim) == int or type(state_dim) == np.int64:
             state_dim = [state_dim]
 
@@ -70,7 +71,7 @@ class ExperienceReplay(BaseExperienceReplay):
         self.ptr = (self.ptr + 1) % self.max_size
         self.size = min(self.size + 1, self.max_size)
 
-    def sample(self) -> tuple[Transition, np.ndarray]:
+    def sample(self) -> Transition:
         indices = np.random.choice(self.size, size=self.batch_size, replace=False)
         state = self.state_buffer[indices]
         action = self.action_buffer[indices]
@@ -81,19 +82,7 @@ class ExperienceReplay(BaseExperienceReplay):
             state=state, action=action, next_state=next_state, reward=reward, done=done
         )
 
-        return batch, indices
-
-    def sample_from_indices(self, indices: np.ndarray) -> Transition:
-        state = self.state_buffer[indices]
-        action = self.action_buffer[indices]
-        next_state = torch.stack([self.next_state_buffer[idx] for idx in indices])
-        reward = self.reward_buffer[indices]
-        done = self.done_buffer[indices]
-        batch = Transition(
-            state=state, action=action, next_state=next_state, reward=reward, done=done
-        )
-
-        return batch, indices
+        return batch
 
     def clear(self):
         self.state_buffer = torch.zeros_like(self.state_buffer)

@@ -15,7 +15,7 @@ from utils.base_classes import (
     Transition,
 )
 from value_based.dqn.dqn_writer import DQNWriter
-from utils.buffer import ExperienceReplay, make_experience_replay
+from utils.replay_buffers import ExperienceReplay, make_experience_replay
 
 
 class VanillaDQNAgent(BaseAgent):
@@ -88,21 +88,25 @@ class VanillaDQNAgent(BaseAgent):
         else:
             return self.select_random_action()
 
-    def select_greedy_action(self, state: Tensor) -> Tensor:
-        self.policy_net.eval()
+    def select_greedy_action(self, state: Tensor, eval: bool = False) -> Tensor:
+        if eval:
+            self.policy_net.eval()
         with torch.no_grad():
             if self.policy_net.action_type == "discrete":
                 # t.max(1) will return the largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
                 max_valued_action: Tensor = self.policy_net(state)[0].max(1)[1]
-                return max_valued_action.view(1, 1)
+                action = max_valued_action.view(1, 1)
             elif self.policy_net.action_type == "multidiscrete":
-                return torch.tensor(
+                action = torch.tensor(
                     self.decode_gym_action(self.policy_net(state)),
                     device=self.device,
                     dtype=torch.long,
                 )
+
+            self.policy_net.train()
+            return action
 
     def decode_gym_action(self, nn_action_values: Tensor) -> list:
         # t.max(1) will return the largest column value of each row.
@@ -136,8 +140,7 @@ class VanillaDQNAgent(BaseAgent):
             self.update_parameters(total_loss, time_step)
 
     def get_transitions(self):
-        sample_tuple = self.experience_replay.sample()
-        transitions: Transition = sample_tuple[0]
+        transitions: Transition = self.experience_replay.sample()
 
         state_batch = transitions.state.squeeze(1)
         next_state_batch = transitions.next_state.squeeze(1)
@@ -162,7 +165,7 @@ class VanillaDQNAgent(BaseAgent):
         reward_batch: Tensor,
         mask_batch: Tensor,
     ) -> Tensor:
-        total_loss: Tensor = 0
+        total_loss: Tensor = 0.0
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken

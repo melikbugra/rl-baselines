@@ -13,7 +13,12 @@ from utils.base_classes import (
     Transition,
 )
 from value_based.dqn.dqn_writer import DQNWriter
-from utils.buffer import ExperienceReplay, make_experience_replay
+from utils.replay_buffers import (
+    ExperienceReplay,
+    make_experience_replay,
+    PrioritizedExperienceReplay,
+    make_prioritized_experience_replay,
+)
 
 
 class RainbowAgent(BaseAgent):
@@ -40,6 +45,8 @@ class RainbowAgent(BaseAgent):
         n_step: int = 3,
         double_enabled: bool = True,
         noisy_enabled: bool = True,
+        per_alpha: float = 0.2,
+        per_beta: float = 0.6,
     ) -> None:
         super().__init__(
             env=env,
@@ -49,6 +56,13 @@ class RainbowAgent(BaseAgent):
             device=device,
         )
         self.writer: DQNWriter = writer
+
+        self.gradient_clipping_max_norm: float = gradient_clipping_max_norm
+        self.n_step: int = n_step
+        self.double_enabled: bool = double_enabled
+        self.noisy_enabled: bool = noisy_enabled
+        self.per_enabled: bool = True if experience_replay_type == "per" else False
+        self.experience_replay_type = experience_replay_type
 
         if not noisy_enabled:
             self.epsilon_end: float = epsilon_end
@@ -66,6 +80,7 @@ class RainbowAgent(BaseAgent):
 
         self.policy_net: BaseNeuralNetwork = neural_network
         self.target_net: BaseNeuralNetwork = deepcopy(neural_network)
+        self.target_net.eval()
 
         if experience_replay_type == "er":
             self.experience_replay: ExperienceReplay = make_experience_replay(
@@ -77,13 +92,28 @@ class RainbowAgent(BaseAgent):
                 gamma=gamma,
                 network_type=self.policy_net.network_type,
             )
-
-        self.gradient_clipping_max_norm: float = gradient_clipping_max_norm
-
-        self.double_enabled: bool = double_enabled
-        self.noisy_enabled: bool = noisy_enabled
+        elif experience_replay_type == "per":
+            self.per_enabled: bool = True
+            self.per_beta: float = per_beta
+            self.per_beta_increase = (1 - self.per_beta) / (time_steps)
+            self.per_prior_eps: float = 1e-6
+            self.experience_replay: PrioritizedExperienceReplay = (
+                make_prioritized_experience_replay(
+                    env=env,
+                    experience_replay_size=experience_replay_size,
+                    batch_size=batch_size,
+                    device=device,
+                    n_step=n_step,
+                    gamma=gamma,
+                    network_type=self.policy_net.network_type,
+                    alpha=per_alpha,
+                )
+            )
 
     def select_action(self, state: Tensor) -> Tensor:
+        if self.per_enabled:
+            self.adaptive_per_beta()
+
         if self.noisy_enabled:
             return self.select_greedy_action(state)
         else:
@@ -96,21 +126,25 @@ class RainbowAgent(BaseAgent):
             else:
                 return self.select_random_action()
 
-    def select_greedy_action(self, state: Tensor) -> Tensor:
-        self.policy_net.eval()
+    def select_greedy_action(self, state: Tensor, eval: bool = False) -> Tensor:
+        if eval:
+            self.policy_net.eval()
         with torch.no_grad():
             if self.policy_net.action_type == "discrete":
                 # t.max(1) will return the largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
                 max_valued_action: Tensor = self.policy_net(state)[0].max(1)[1]
-                return max_valued_action.view(1, 1)
+                action = max_valued_action.view(1, 1)
             elif self.policy_net.action_type == "multidiscrete":
-                return torch.tensor(
+                action = torch.tensor(
                     self.decode_gym_action(self.policy_net(state)),
                     device=self.device,
                     dtype=torch.long,
                 )
+
+            self.policy_net.train()
+            return action
 
     def decode_gym_action(self, nn_action_values: Tensor) -> list:
         # t.max(1) will return the largest column value of each row.
@@ -131,21 +165,42 @@ class RainbowAgent(BaseAgent):
         if self.epsilon < self.epsilon_end:
             self.epsilon = self.epsilon_end
 
+    def adaptive_per_beta(self):
+        if self.per_beta < 1:
+            self.per_beta += self.per_beta_increase
+        if self.per_beta > 1:
+            self.per_beta = 1
+
     def optimize_model(self, time_step: int):
         self.policy_net.train()
         if len(self.experience_replay) < self.experience_replay.batch_size:
             return
 
         for _ in range(self.gradient_steps):
-            transitions = self.get_transitions()
+            if self.per_enabled:
+                transitions_weights_indices = self.get_per_transitions()
+                transitions = transitions_weights_indices[0]
+                weights = transitions_weights_indices[1]
+                indices = transitions_weights_indices[2]
 
-            total_loss = self.compute_loss(*transitions)
+                elementwise_loss = self.compute_loss(*transitions, elementwise=True)
+                total_loss = torch.mean(elementwise_loss * weights)
+
+                self.per_update(elementwise_loss, indices)
+
+            else:
+                transitions = self.get_transitions()
+                total_loss = self.compute_loss(*transitions)
 
             self.update_parameters(total_loss, time_step)
 
+    def per_update(self, elementwise_loss: Tensor, indices: list[int]):
+        loss_for_prior = elementwise_loss.detach().cpu().numpy()
+        new_priorities = loss_for_prior + self.per_prior_eps
+        self.experience_replay.update_priorities(indices, new_priorities)
+
     def get_transitions(self):
-        sample_tuple = self.experience_replay.sample()
-        transitions: Transition = sample_tuple[0]
+        transitions: Transition = self.experience_replay.sample()
 
         state_batch = transitions.state.squeeze(1)
         next_state_batch = transitions.next_state.squeeze(1)
@@ -162,6 +217,33 @@ class RainbowAgent(BaseAgent):
             mask_batch,
         )
 
+    def get_per_transitions(self):
+        sample_tuple: tuple[Transition, Tensor] = self.experience_replay.sample(
+            self.per_beta
+        )
+        transitions: Transition = sample_tuple[0]
+        weights: Tensor = sample_tuple[1]
+        indices: list[int] = sample_tuple[2]
+
+        state_batch = transitions.state.squeeze(1)
+        next_state_batch = transitions.next_state.squeeze(1)
+        action_batch = transitions.action.squeeze(1)
+        reward_batch = transitions.reward.squeeze(1)
+        done_batch = transitions.done.squeeze(1).int()
+        mask_batch = 1 - done_batch
+
+        return [
+            (
+                state_batch,
+                next_state_batch,
+                action_batch,
+                reward_batch,
+                mask_batch,
+            ),
+            weights,
+            indices,
+        ]
+
     def compute_loss(
         self,
         state_batch: Tensor,
@@ -169,8 +251,14 @@ class RainbowAgent(BaseAgent):
         action_batch: Tensor,
         reward_batch: Tensor,
         mask_batch: Tensor,
+        elementwise: bool = False,
     ) -> Tensor:
-        total_loss: Tensor = 0
+        if elementwise:
+            total_loss: Tensor = torch.zeros_like(action_batch, dtype=torch.float32)
+            criterion = nn.SmoothL1Loss(reduction="none")
+        else:
+            total_loss: Tensor = 0.0
+            criterion = nn.SmoothL1Loss()
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
@@ -193,12 +281,14 @@ class RainbowAgent(BaseAgent):
                 next_state_values * self.gamma**self.experience_replay.n_step
             ) + reward_batch.squeeze(1)
 
-            criterion = nn.SmoothL1Loss()
             total_loss += criterion(
                 state_action_values, target_state_action_values.unsqueeze(1)
             )
 
-        self.writer.losses.append(total_loss.item())
+        if self.per_enabled:
+            self.writer.losses.append(torch.mean(total_loss).item())
+        else:
+            self.writer.losses.append(total_loss.item())
 
         return total_loss
 
@@ -253,7 +343,7 @@ class RainbowAgent(BaseAgent):
         if time_step % self.target_update_frequency == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
 
-        if self.noisy_enabled:
-            # Noisy reset noise
-            self.policy_net.reset_noise()
-            self.target_net.reset_noise()
+            if self.noisy_enabled:
+                # Noisy reset noise
+                self.policy_net.reset_noise()
+                self.target_net.reset_noise()

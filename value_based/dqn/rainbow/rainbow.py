@@ -39,9 +39,11 @@ class Rainbow(BaseAlgorithm):
         normalize_observation: bool = False,
         gradient_clipping_max_norm: float = 1.0,
         # rainbow
-        n_step: int = 1,
+        n_step: int = 3,
         double_enabled: bool = True,
         noisy_enabled: bool = True,
+        per_alpha: float = 0.2,
+        per_beta: float = 0.6,
     ) -> None:
         self.algo_name = "Rainbow"
         super().__init__(
@@ -134,6 +136,8 @@ class Rainbow(BaseAlgorithm):
             n_step=n_step,
             double_enabled=double_enabled,
             noisy_enabled=noisy_enabled,
+            per_alpha=per_alpha,
+            per_beta=per_beta,
         )
 
     def save(self, folder: str, checkpoint=""):
@@ -150,6 +154,10 @@ class Rainbow(BaseAlgorithm):
             "checkpoint": checkpoint,
             "device": self.device,
             "normalize_observation": self.normalize_observation,
+            "n_step": self.agent.n_step,
+            "experience_replay_type": self.agent.experience_replay_type,
+            "double_enabled": self.agent.double_enabled,
+            "noisy_enabled": self.agent.noisy_enabled,
         }
         torch.save(model_state, save_path)
 
@@ -161,12 +169,21 @@ class Rainbow(BaseAlgorithm):
         normalize_observation = loaded_model["normalize_observation"]
         checkpoint = loaded_model["checkpoint"]
         device = loaded_model["device"]
+        n_step = loaded_model["n_step"]
+        experience_replay_type = loaded_model["experience_replay_type"]
+        double_enabled = loaded_model["double_enabled"]
+        noisy_enabled = loaded_model["noisy_enabled"]
 
         self.__init__(
             self.env,
             network_arch=network_arch,
             network_type=network_type,
             normalize_observation=normalize_observation,
+            n_step=n_step,
+            experience_replay_type=experience_replay_type,
+            double_enabled=double_enabled,
+            noisy_enabled=noisy_enabled,
+            device=device,
         )
 
         self.agent.policy_net.load_state_dict(loaded_model["state_dict"])

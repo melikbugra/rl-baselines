@@ -161,7 +161,7 @@ class BaseAlgorithm(ABC):
             while not done:
                 if render:
                     eval_env.render()
-                action = self.agent.select_greedy_action(state)
+                action = self.agent.select_greedy_action(state, eval=True)
                 if self.agent.action_type == "discrete":
                     action = action.item()
                 observation, reward, terminated, truncated, _ = eval_env.step(action)
