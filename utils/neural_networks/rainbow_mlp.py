@@ -7,13 +7,15 @@ from utils.base_classes.base_neural_network import BaseNeuralNetwork
 from utils.neural_networks.layers import NoisyLinear
 
 
-class NoisyMLP(BaseNeuralNetwork):
+class RainbowMLP(BaseNeuralNetwork):
     def __init__(
         self,
         input_neurons: int,
         network_arch: list[int],
         output_neurons: list[int] | int,
-        device: torch.device,
+        noisy: bool = False,
+        dueling: bool = False,
+        device: torch.device = "cpu",
     ):
         super().__init__()
 
@@ -23,31 +25,48 @@ class NoisyMLP(BaseNeuralNetwork):
 
         self.layer_neuron_nums: list[int] = [input_neurons] + network_arch
 
-        self.fc_list = nn.ModuleList()
+        self.fc_list: list[nn.Linear] | list[NoisyLinear] = nn.ModuleList()
 
         self.fc_list.append(
             nn.Linear(self.layer_neuron_nums[0], self.layer_neuron_nums[1])
         )
 
         for i in range(1, fc_num):
-            self.fc_list.append(
-                NoisyLinear(self.layer_neuron_nums[i], self.layer_neuron_nums[i + 1])
-            )
+            if noisy:
+                self.fc_list.append(
+                    NoisyLinear(
+                        self.layer_neuron_nums[i], self.layer_neuron_nums[i + 1]
+                    )
+                )
+            else:
+                self.fc_list.append(
+                    nn.Linear(self.layer_neuron_nums[i], self.layer_neuron_nums[i + 1])
+                )
 
         if isinstance(output_neurons, int):
             self.action_type = "discrete"
             self.action_dim = 1
-            self.head = NoisyLinear(self.layer_neuron_nums[-1], output_neurons)
+            if noisy:
+                self.head = NoisyLinear(self.layer_neuron_nums[-1], output_neurons)
+            else:
+                self.head = nn.Linear(self.layer_neuron_nums[-1], output_neurons)
 
         elif isinstance(output_neurons, list):
             self.action_type = "multidiscrete"
             self.action_dim = len(output_neurons)
 
-            self.heads: list[NoisyLinear] = []
-            for output_neuron in output_neurons:
-                self.heads.append(
-                    NoisyLinear(self.layer_neuron_nums[-1], output_neuron)
-                )
+            if noisy:
+                self.heads: list[NoisyLinear] = []
+                for output_neuron in output_neurons:
+                    self.heads.append(
+                        NoisyLinear(self.layer_neuron_nums[-1], output_neuron)
+                    )
+            else:
+                self.heads: list[nn.Linear] = []
+                for output_neuron in output_neurons:
+                    self.heads.append(
+                        nn.Linear(self.layer_neuron_nums[-1], output_neuron)
+                    )
 
         # self._initialize_weights()
         self.to(device)

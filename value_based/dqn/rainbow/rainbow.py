@@ -4,7 +4,12 @@ from gymnasium import Env
 import torch
 
 from utils.base_classes import BaseAlgorithm, BaseNeuralNetwork
-from utils.neural_networks import MLP, make_mlp, CNN, make_cnn
+from utils.neural_networks import (
+    RainbowMLP,
+    RainbowCNN,
+    make_rainbow_mlp,
+    make_rainbow_cnn,
+)
 
 from value_based.dqn.rainbow.rainbow_agent import RainbowAgent
 from value_based.dqn.dqn_writer import DQNWriter
@@ -97,14 +102,14 @@ class Rainbow(BaseAlgorithm):
         )
 
         if network_type == "mlp":
-            neural_network: MLP = make_mlp(
+            neural_network: RainbowMLP = make_rainbow_mlp(
                 env=env,
                 network_arch=network_arch,
                 device=device,
                 noisy_enabled=noisy_enabled,
             )
         elif network_type == "cnn":
-            neural_network: CNN = make_cnn(
+            neural_network: RainbowCNN = make_rainbow_cnn(
                 env=env, device=device, noisy_enabled=noisy_enabled
             )
 
@@ -175,7 +180,7 @@ class Rainbow(BaseAlgorithm):
             experience_replay_type=experience_replay_type,
             double_enabled=double_enabled,
             noisy_enabled=noisy_enabled,
-            device=device,
+            # device=device,
         )
 
         self.agent.policy_net.load_state_dict(loaded_model["state_dict"])

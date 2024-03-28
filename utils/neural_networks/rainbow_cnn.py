@@ -6,12 +6,13 @@ from utils.base_classes.base_neural_network import BaseNeuralNetwork
 from utils.neural_networks.layers import NoisyLinear
 
 
-class NoisyCNN(BaseNeuralNetwork):
+class RainbowCNN(BaseNeuralNetwork):
     def __init__(
         self,
         input_shape: list[int],
         output_neurons: int,
-        device: torch.device,
+        noisy: bool = False,
+        device: torch.device = "cpu",
     ):
         super().__init__()
 
@@ -28,12 +29,18 @@ class NoisyCNN(BaseNeuralNetwork):
 
         conv_out_size = self._get_conv_out(input_shape)
 
-        self.noisy_layers: list[NoisyLinear] = [
-            NoisyLinear(conv_out_size, 512),
-            NoisyLinear(512, output_neurons),
-        ]
+        if noisy:
+            self.linear_layers: list[NoisyLinear] = [
+                NoisyLinear(conv_out_size, 512),
+                NoisyLinear(512, output_neurons),
+            ]
+        else:
+            self.linear_layers: list[nn.Linear] = [
+                nn.Linear(conv_out_size, 512),
+                nn.Linear(512, output_neurons),
+            ]
 
-        self.fc = nn.Sequential(self.noisy_layers[0], nn.ReLU(), self.noisy_layers[1])
+        self.fc = nn.Sequential(self.linear_layers[0], nn.ReLU(), self.linear_layers[1])
 
         self.to(device)
 
@@ -53,5 +60,5 @@ class NoisyCNN(BaseNeuralNetwork):
 
     def reset_noise(self):
         """Reset all noisy layers."""
-        for layer in self.noisy_layers:
+        for layer in self.linear_layers:
             layer.reset_noise()

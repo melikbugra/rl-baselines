@@ -5,16 +5,15 @@ import torch
 
 
 from utils.neural_networks.mlp import MLP
-from utils.neural_networks.noisy_mlp import NoisyMLP
+from utils.neural_networks.rainbow_mlp import RainbowMLP
 from utils.neural_networks.cnn import CNN
-from utils.neural_networks.noisy_cnn import NoisyCNN
+from utils.neural_networks.rainbow_cnn import RainbowCNN
 
 
 def make_mlp(
     env: Env,
     network_arch: list,
     device: torch.device,
-    noisy_enabled: bool = False,
 ) -> MLP:
     """Returns the neural network
     :return: Neural network
@@ -28,20 +27,12 @@ def make_mlp(
 
     input_neurons = np.prod(env.observation_space.shape)
 
-    if noisy_enabled:
-        neural_network = NoisyMLP(
-            input_neurons=input_neurons,
-            network_arch=network_arch,
-            output_neurons=output_neurons,
-            device=device,
-        )
-    else:
-        neural_network = MLP(
-            input_neurons=input_neurons,
-            network_arch=network_arch,
-            output_neurons=output_neurons,
-            device=device,
-        )
+    neural_network = MLP(
+        input_neurons=input_neurons,
+        network_arch=network_arch,
+        output_neurons=output_neurons,
+        device=device,
+    )
 
     return neural_network
 
@@ -49,7 +40,6 @@ def make_mlp(
 def make_cnn(
     env: Env,
     device: torch.device,
-    noisy_enabled: bool = False,
 ) -> CNN:
     if isinstance(env.action_space, Discrete):
         output_neurons = int(env.action_space.n)
@@ -57,17 +47,60 @@ def make_cnn(
     elif isinstance(env.action_space, MultiDiscrete):
         raise Exception("Multidiscrete action is not supported for CNN")
 
-    if noisy_enabled:
-        neural_network = NoisyCNN(
-            input_shape=env.observation_space.shape,
-            output_neurons=output_neurons,
-            device=device,
-        )
-    else:
-        neural_network = CNN(
-            input_shape=env.observation_space.shape,
-            output_neurons=output_neurons,
-            device=device,
-        )
+    neural_network = CNN(
+        input_shape=env.observation_space.shape,
+        output_neurons=output_neurons,
+        device=device,
+    )
+
+    return neural_network
+
+
+def make_rainbow_mlp(
+    env: Env,
+    network_arch: list,
+    noisy_enabled: bool = False,
+    device: torch.device = "cpu",
+) -> RainbowMLP:
+    """Returns the neural network
+    :return: Neural network
+    :rtype: MLP
+    """
+    if isinstance(env.action_space, Discrete):
+        output_neurons = int(env.action_space.n)
+
+    elif isinstance(env.action_space, MultiDiscrete):
+        output_neurons = env.action_space.nvec.tolist()
+
+    input_neurons = np.prod(env.observation_space.shape)
+
+    neural_network = RainbowMLP(
+        input_neurons=input_neurons,
+        network_arch=network_arch,
+        output_neurons=output_neurons,
+        noisy=noisy_enabled,
+        device=device,
+    )
+
+    return neural_network
+
+
+def make_rainbow_cnn(
+    env: Env,
+    noisy_enabled: bool = False,
+    device: torch.device = "cpu",
+) -> RainbowCNN:
+    if isinstance(env.action_space, Discrete):
+        output_neurons = int(env.action_space.n)
+
+    elif isinstance(env.action_space, MultiDiscrete):
+        raise Exception("Multidiscrete action is not supported for CNN")
+
+    neural_network = RainbowCNN(
+        input_shape=env.observation_space.shape,
+        output_neurons=output_neurons,
+        noisy=noisy_enabled,
+        device=device,
+    )
 
     return neural_network
