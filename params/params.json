@@ -1,0 +1,32 @@
+{
+    "CartPole-v0": {
+        "VanillaDQN": {
+            "time_steps": 40000,
+            "learning_rate": 0.0003,
+            "batch_size": 64,
+            "gradient_steps": 1,
+            "gamma": 0.99,
+            "experience_replay_size": 10000,
+            "exploration_percentage": 10,
+            "target_update_frequency": 100,
+            "normalize_observation": false,
+            "network_arch": [
+                128,
+                128
+            ]
+        },
+        "CrossEnstropy": {
+            "time_steps": 80000,
+            "learning_rate": 0.01,
+            "batch_size": 256,
+            "percentile": 70,
+            "normalize_observation": false,
+            "episodes_to_train": 16,
+            "experience_replay_size": 10000,
+            "network_arch": [
+                128,
+                128
+            ]
+        }
+    }
+}
