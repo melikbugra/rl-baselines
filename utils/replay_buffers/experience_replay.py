@@ -21,6 +21,7 @@ class ExperienceReplay(BaseExperienceReplay):
         gamma: float = 0.99,
     ):
         self.device = device
+        self.action_dim = action_dim
         if type(state_dim) == int or type(state_dim) == np.int64:
             state_dim = [state_dim]
 

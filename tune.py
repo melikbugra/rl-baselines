@@ -58,7 +58,7 @@ def main():
         param_dicts=param_dicts,
         n_trials=100,
         n_jobs=1,
-        # storage="postgresql://optuna:optuna@optuna-db.melikbugraozcelik.com/optuna",
+        storage="postgresql://optuna:optuna@optuna-db.melikbugraozcelik.com/optuna",
     )
 
     tuner.tune()

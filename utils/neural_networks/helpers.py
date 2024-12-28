@@ -95,6 +95,9 @@ def make_rainbow_cnn(
 
     elif isinstance(env.action_space, MultiDiscrete):
         raise Exception("Multidiscrete action is not supported for CNN")
+    
+    else:
+        raise Exception("Action space is not supported")
 
     neural_network = RainbowCNN(
         input_shape=env.observation_space.shape,

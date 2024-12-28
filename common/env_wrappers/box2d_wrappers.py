@@ -73,8 +73,10 @@ class ProcessFrame84(gym.ObservationWrapper):
             img = np.reshape(frame, [250, 160, 3]).astype(np.float32)
         elif frame.size == 96 * 96 * 3:
             img = np.reshape(frame, [96, 96, 3]).astype(np.float32)
+        elif frame.size == 600 * 800 * 3:
+            img = np.reshape(frame, [600, 800, 3]).astype(np.float32)
         else:
-            assert False, "Unknown resolution."
+            raise AssertionError(f"Unknown resolution: {frame.shape}")
         img = img[:, :, 0] * 0.299 + img[:, :, 1] * 0.587 + img[:, :, 2] * 0.114
         resized_screen = cv2.resize(img, (84, 110), interpolation=cv2.INTER_AREA)
         x_t = resized_screen[18:102, :]

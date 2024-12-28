@@ -8,6 +8,7 @@ from utils.replay_buffers.experience_replay import ExperienceReplay
 from utils.replay_buffers.prioritized_experience_replay import (
     PrioritizedExperienceReplay,
 )
+from utils.replay_buffers.transition_buffer import TransitionBuffer
 
 
 def make_experience_replay(
@@ -88,3 +89,19 @@ def make_prioritized_experience_replay(
     )
 
     return experience_replay
+
+
+def make_transition_buffer(
+    device: torch.device,
+) -> TransitionBuffer:
+    """Returns the transition buffer
+
+    :return: The transition buffer
+    :rtype: TransitionBuffer
+    """
+
+    transition_buffer = TransitionBuffer(
+        device=device,
+    )
+
+    return transition_buffer
