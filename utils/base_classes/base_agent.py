@@ -69,7 +69,7 @@ class BaseAgent(ABC):
             ).squeeze()
 
     @abstractmethod
-    def select_greedy_action(self, state: Tensor) -> Tensor:
+    def select_greedy_action(self, state: Tensor, eval: bool = False) -> Tensor:
         """Selects an action under exploitation strategy
 
         :param state: Environment state as a tensor
@@ -102,11 +102,12 @@ class BaseAgent(ABC):
 
     def compute_loss(
         self,
-        state_batch: Tensor,
-        next_state_batch: Tensor,
-        action_batch: Tensor,
-        reward_batch: Tensor,
-        mask_batch: Tensor,
+        state_batch: Tensor = None,
+        next_state_batch: Tensor = None,
+        action_batch: Tensor = None,
+        reward_batch: Tensor = None,
+        mask_batch: Tensor = None,
+        log_probs_batch: Tensor = None,
     ) -> Tensor:
         """Computes and returns the total loss
 

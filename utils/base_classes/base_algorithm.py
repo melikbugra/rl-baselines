@@ -8,7 +8,7 @@ import time
 import gymnasium as gym
 from gymnasium import Env
 from gymnasium.spaces import Discrete, MultiDiscrete
-from gymnasium.wrappers import normalize
+from gymnasium.wrappers import NormalizeObservation
 import numpy as np
 import matplotlib.pyplot as plt
 from optuna.trial import BaseTrial
@@ -43,6 +43,8 @@ class BaseAlgorithm(ABC):
         mlflow_tracking_uri: str = None,
         normalize_observation: bool = False,
         gradient_clipping_max_norm: float = 1.0,
+        render_eval: bool = False,
+        episodic: bool = False,
     ) -> None:
         self.env: Env = env
         self.time_steps: int = time_steps
@@ -59,9 +61,13 @@ class BaseAlgorithm(ABC):
         self.writing_period: int = writing_period
         self.normalize_observation: bool = normalize_observation
         if normalize_observation:
-            self.env = normalize.NormalizeObservation(env)
+            self.env = NormalizeObservation(env)
 
         self.gradient_clipping_max_norm: float = gradient_clipping_max_norm
+        self.render_eval: bool = render_eval
+        self.episodic: bool = episodic
+        self.collect_data_left_off: int = 0
+        self.episode_finished: bool = False
 
         self.algo_name: str
 
@@ -69,6 +75,7 @@ class BaseAlgorithm(ABC):
         self.writer: BaseWriter
 
         self.train_scores: list[float] = []
+        self.eval_scores: list[float] = []
 
         self.mlflow_logger = MLFlowLogger(mlflow_tracking_uri)
 
@@ -83,11 +90,32 @@ class BaseAlgorithm(ABC):
             "SkiingNoFrameskip-v4",
         ]
 
+        self.melikbugra_envs: list[str] = [
+            "WorldsHardestGame-v0",
+        ]
+
         self.box_2d_viz_envs: list[str] = ["CarRacing-v2"]
 
     def train(self, trial: BaseTrial = None) -> float:
         """Train the agent"""
         self.start_time = time.perf_counter()
+        if self.episodic:
+            last_avg_eval_score = self.train_episodes(trial)
+        else:
+            last_avg_eval_score = self.train_iterations(trial)
+
+        self.time_elapsed = time.perf_counter() - self.start_time
+        if self.mlflow_logger.log:
+            self.mlflow_logger.end_run()
+
+        if self.plot_train_sores:
+            self.plot_scores(show_result=True)
+            plt.show()
+
+        return last_avg_eval_score
+
+    def train_iterations(self, trial: BaseTrial = None) -> float:
+        last_avg_eval_score = None
         best_avg_eval_score = -np.inf
         for time_step, transition in self.collect_data():
             self.agent.experience_replay.push(transition)
@@ -95,7 +123,11 @@ class BaseAlgorithm(ABC):
             if (
                 time_step % self.writing_period == 0 and time_step != 0
             ) or time_step == self.time_steps - 1:
-                last_avg_eval_score = self.evaluate(time_step, episodes=2, render=False)
+                last_avg_eval_score = self.evaluate(
+                    time_step,
+                    episodes=1,
+                    render=self.render_eval,  # TODO: make episodes a parameter
+                )
 
                 # For optuna pruning
                 if trial:
@@ -109,13 +141,38 @@ class BaseAlgorithm(ABC):
                     print(self.writer)
                 self.writer.reset(time_step + self.writing_period)
 
-        self.time_elapsed = time.perf_counter() - self.start_time
-        if self.mlflow_logger.log:
-            self.mlflow_logger.end_run()
+        return last_avg_eval_score
 
-        if self.plot_train_sores:
-            self.plot_scores(show_result=True)
-            plt.show()
+    def train_episodes(self, trial: BaseTrial = None) -> float:
+        last_avg_eval_score = None
+        best_avg_eval_score = -np.inf
+        while self.collect_data_left_off < self.time_steps:
+            for time_step, transition in self.collect_data():
+                if not self.episode_finished:
+                    self.agent.experience_replay.push(transition)
+                if self.episode_finished:
+                    self.agent.optimize_model(time_step)
+                    self.episode_finished = False
+                    if (
+                        round(time_step, -2) % self.writing_period == 0
+                        and time_step != 0
+                    ) or time_step == self.time_steps - 1:
+                        last_avg_eval_score = self.evaluate(
+                            time_step,
+                            episodes=1,
+                            render=self.render_eval,  # TODO: make episodes a parameter
+                        )
+                        # For optuna pruning
+                        if trial:
+                            trial.report(-last_avg_eval_score, time_step)
+
+                        if last_avg_eval_score >= best_avg_eval_score:
+                            self.save(folder=self.models_folder, checkpoint="best_avg")
+                            best_avg_eval_score = last_avg_eval_score
+                        self.writer.time_elapsed = time.perf_counter() - self.start_time
+                        if not trial:
+                            print(self.writer)
+                        self.writer.reset(time_step + self.writing_period)
 
         return last_avg_eval_score
 
@@ -132,7 +189,7 @@ class BaseAlgorithm(ABC):
             else:
                 eval_env: Env = make_atari_env(self.env.spec.id)
             if self.normalize_observation:
-                eval_env = normalize.NormalizeObservation(eval_env)
+                eval_env = NormalizeObservation(eval_env)
         elif self.env.spec.id in self.box_2d_viz_envs:
             if render:
                 eval_env: Env = make_box2d_viz_env(
@@ -141,14 +198,23 @@ class BaseAlgorithm(ABC):
             else:
                 eval_env: Env = make_box2d_viz_env(self.env.spec.id, continuous=False)
             if self.normalize_observation:
-                eval_env = normalize.NormalizeObservation(eval_env)
+                eval_env = NormalizeObservation(eval_env)
+        elif self.env.spec.id in self.melikbugra_envs:
+            if render:
+                eval_env: Env = make_atari_env(
+                    self.env.spec.id, render_mode="human", fire_reset=False
+                )
+            else:
+                eval_env: Env = make_atari_env(self.env.spec.id, fire_reset=False)
+            if self.normalize_observation:
+                eval_env = NormalizeObservation(eval_env)
         else:
             if render:
                 eval_env: Env = gym.make(self.env.spec.id, render_mode="human")
             else:
                 eval_env: Env = gym.make(self.env.spec.id)
             if self.normalize_observation:
-                eval_env = normalize.NormalizeObservation(eval_env)
+                eval_env = NormalizeObservation(eval_env)
 
         episode_scores = []
         for _ in range(episodes):
@@ -182,14 +248,15 @@ class BaseAlgorithm(ABC):
                 print(f"Score: {episode_score}")
 
         average_score = np.mean(episode_scores)
-        if not render:
-            self.writer.avg_eval_score = average_score
-            self.mlflow_logger.log_metric(
-                "Average Evaluation Score",
-                average_score,
-                step=time_step,
-            )
+        # if not render:
+        self.writer.avg_eval_score = average_score
+        self.mlflow_logger.log_metric(
+            "Average Evaluation Score",
+            average_score,
+            step=time_step,
+        )
 
+        eval_env.close()
         return average_score
 
     def collect_data(self) -> Iterator[Transition]:
@@ -203,7 +270,7 @@ class BaseAlgorithm(ABC):
 
         episode_score = 0
 
-        for time_step in range(self.time_steps):
+        for time_step in range(self.collect_data_left_off, self.time_steps):
             if self.render:
                 self.env.render()
             action = self.agent.select_action(state)
@@ -232,7 +299,7 @@ class BaseAlgorithm(ABC):
 
             state = next_state
 
-            if done:
+            if done or time_step == self.time_steps - 1:
                 self.writer.train_scores.append(episode_score)
                 self.train_scores.append(episode_score)
                 self.mlflow_logger.log_metric(
@@ -246,6 +313,11 @@ class BaseAlgorithm(ABC):
 
                 state, _ = self.env.reset(seed=self.env_seed)
                 state = self.state_to_torch(state)
+
+                if self.episodic:
+                    self.collect_data_left_off = time_step + 1
+                    self.episode_finished = True
+                    break
 
                 episode_score = 0
 
