@@ -2,15 +2,15 @@ import gymnasium as gym
 
 import worlds_hardest_game_env
 
-from policy_based.cross_entropy import CrossEntropy
-from value_based.dqn import VanillaDQN, Rainbow
-from policy_based.reinforce import REINFORCE
+from rl_baselines.policy_based.cross_entropy import CrossEntropy
+from rl_baselines.value_based.dqn import VanillaDQN, Rainbow
+from rl_baselines.policy_based.reinforce import REINFORCE
 
-from common.env_wrappers import make_atari_env, make_box2d_viz_env
+from rl_baselines.common.env_wrappers import make_atari_env, make_box2d_viz_env
 
 
 def main():
-    env = gym.make("CartPole-v1")
+    env = gym.make("Pendulum-v1")
     # env = make_atari_env("PongNoFrameskip-v4")
     # env = make_box2d_viz_env("CarRacing-v2", continuous=False)
     # env = make_atari_env(
@@ -20,16 +20,16 @@ def main():
     env.reset()
     model = REINFORCE(
         env=env,
-        time_steps=100000,
-        learning_rate=3e-3,
+        episodes_to_train=1000,
+        learning_rate=3e-4,
         gamma=0.99,
-        episodes_to_train=16,
         render=False,
         normalize_observation=False,
-        network_arch=[128],
+        mlflow_tracking_uri="https://mlflow.melikbugraozcelik.com/",
+        network_arch=[128, 128],
         network_type="mlp",
         device="cpu",
-        writing_period=1000,
+        writing_period=10,
         plot_train_sores=True,
     )
     # model = CrossEntropy(
@@ -52,19 +52,19 @@ def main():
     #     time_steps=10000,
     #     learning_rate=3e-4,
     #     batch_size=64,
-    #     gradient_steps=1,
+    #     gradient_steps=3,
     #     gamma=0.99,
     #     experience_replay_size=10000,
     #     render=False,
-    #     exploration_percentage=10,
+    #     exploration_percentage=5,
     #     target_update_frequency=1000,
     #     writing_period=1000,
     #     plot_train_sores=True,
     #     # mlflow_tracking_uri="http://mlflow.melikbugraozcelik.com/",
     #     normalize_observation=False,
     #     network_arch=[128, 128],
-    #     network_type="cnn",
-    #     device="cuda:0",
+    #     network_type="mlp",
+    #     device="cpu",
     # )
     # model = Rainbow(
     #     env=env,
