@@ -293,6 +293,26 @@ colorama = {version = "*", markers = "sys_platform == \"win32\""}
 development = ["black", "flake8", "mypy", "pytest", "types-colorama"]
 
 [[package]]
+name = "continuous-maze-env"
+version = "0.1.0"
+description = ""
+optional = false
+python-versions = "^3.11"
+files = []
+develop = true
+
+[package.dependencies]
+gymnasium = {version = "^0.28.1", extras = ["box2d"]}
+matplotlib = "^3.9.2"
+numpy = "^2.1.3"
+opencv-python = "^4.10.0.84"
+pyglet = "2.0.18"
+
+[package.source]
+type = "directory"
+url = "../continuous-maze"
+
+[[package]]
 name = "contourpy"
 version = "1.3.1"
 description = "Python library for calculating contours of 2D quadrilateral grids"
@@ -2025,6 +2045,17 @@ files = [
 ]
 
 [[package]]
+name = "pyglet"
+version = "2.0.18"
+description = "pyglet is a cross-platform games and multimedia package."
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "pyglet-2.0.18-py3-none-any.whl", hash = "sha256:e592952ae0297e456c587b6486ed8c3e5f9d0c3519d517bb92dde5fdf4c26b41"},
+    {file = "pyglet-2.0.18.tar.gz", hash = "sha256:7cf9238d70082a2da282759679f8a011cc979753a32224a8ead8ed80e48f99dc"},
+]
+
+[[package]]
 name = "pyparsing"
 version = "3.2.0"
 description = "pyparsing module - Classes and methods to define and execute parsing grammars"
@@ -2793,4 +2824,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "ad0f9c4c20ccbd3e7ae5721591ae08f28349635a5588a2abed20c5839f0bd2c1"
+content-hash = "a2cc6f02772a163ccbdbc2cf18f0bf48a037f47746e46b54688c62a92e37f818"

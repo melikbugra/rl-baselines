@@ -8,6 +8,8 @@ from rl_baselines.utils.neural_networks.mlp import MLP
 from rl_baselines.utils.neural_networks.rainbow_mlp import RainbowMLP
 from rl_baselines.utils.neural_networks.cnn import CNN
 from rl_baselines.utils.neural_networks.rainbow_cnn import RainbowCNN
+from rl_baselines.utils.neural_networks.actor_critic_mlp import ActorCriticMLP
+from rl_baselines.utils.neural_networks.actor_critic_cnn import ActorCriticCNN
 
 
 def make_mlp(
@@ -106,6 +108,55 @@ def make_rainbow_cnn(
         input_shape=env.observation_space.shape,
         output_neurons=output_neurons,
         noisy=noisy_enabled,
+        device=device,
+    )
+
+    return neural_network
+
+
+def make_actor_critic_mlp(
+    env: Env,
+    network_arch: list,
+    device: torch.device,
+) -> ActorCriticMLP:
+    """Returns the neural network
+    :return: Neural network
+    :rtype: MLP
+    """
+    input_neurons = np.prod(env.observation_space.shape)
+
+    if isinstance(env.action_space, Discrete):
+        output_neurons = int(env.action_space.n)
+
+    elif isinstance(env.action_space, MultiDiscrete):
+        output_neurons = env.action_space.nvec.tolist()
+
+    elif isinstance(env.action_space, Box):
+        output_neurons = env.action_space.shape
+
+    neural_network = ActorCriticMLP(
+        input_neurons=input_neurons,
+        network_arch=network_arch,
+        output_neurons=output_neurons,
+        device=device,
+    )
+
+    return neural_network
+
+
+def make_actor_critic_cnn(
+    env: Env,
+    device: torch.device,
+) -> ActorCriticCNN:
+    if isinstance(env.action_space, Discrete):
+        output_neurons = int(env.action_space.n)
+
+    elif isinstance(env.action_space, MultiDiscrete):
+        raise Exception("Multidiscrete action is not supported for CNN")
+
+    neural_network = ActorCriticCNN(
+        input_shape=env.observation_space.shape,
+        output_neurons=output_neurons,
         device=device,
     )
 

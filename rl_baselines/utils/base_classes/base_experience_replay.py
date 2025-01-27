@@ -12,6 +12,16 @@ class Transition(NamedTuple):
     done: Tensor
 
 
+class PolicyBasedTransition(NamedTuple):
+    state: Tensor
+    action: Tensor
+    next_state: Tensor
+    reward: Tensor
+    done: Tensor
+    action_prob: Tensor
+    value: Tensor
+
+
 class BaseExperienceReplay(ABC):
     def __init__(self) -> None:
         self.size: int = 0

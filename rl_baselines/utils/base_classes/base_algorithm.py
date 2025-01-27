@@ -15,10 +15,8 @@ from optuna.trial import BaseTrial
 import torch
 
 from rl_baselines.utils.base_classes.base_experience_replay import Transition
-from rl_baselines.utils.base_classes.base_neural_network import BaseNeuralNetwork
 from rl_baselines.utils.base_classes.base_writer import BaseWriter
 from rl_baselines.utils.base_classes.base_agent import BaseAgent
-from rl_baselines.utils.neural_networks.mlp import MLP
 from rl_baselines.utils.mlflow_logger.mlflow_logger import MLFlowLogger
 from rl_baselines.common.env_wrappers import make_atari_env, make_box2d_viz_env
 
@@ -31,6 +29,7 @@ class BaseAlgorithm(ABC):
     def __init__(
         self,
         env: Env,
+        eval_env_kwargs: dict = {},
         time_steps: int = 100000,
         learning_rate: float = 3e-4,
         network_type: str = "mlp",
@@ -43,11 +42,14 @@ class BaseAlgorithm(ABC):
         mlflow_tracking_uri: str = None,
         normalize_observation: bool = False,
         gradient_clipping_max_norm: float = 1.0,
+        gradient_clipping_value: float = 100,
         render_eval: bool = False,
         episodic: bool = False,
         episodes_to_train: int = 16,
+        log_model: bool = False,
     ) -> None:
         self.env: Env = env
+        self.eval_env_kwargs: dict = eval_env_kwargs
         self.time_steps: int = time_steps
         self.learning_rate: float = learning_rate
         self.network_type: str = network_type
@@ -65,9 +67,11 @@ class BaseAlgorithm(ABC):
             self.env = NormalizeObservation(env)
 
         self.gradient_clipping_max_norm: float = gradient_clipping_max_norm
+        self.gradient_clipping_value: float = gradient_clipping_value
         self.render_eval: bool = render_eval
         self.episodic: bool = episodic
         self.episodes_to_train: int = episodes_to_train
+        self.log_model: bool = log_model
 
         self.algo_name: str
 
@@ -191,10 +195,17 @@ class BaseAlgorithm(ABC):
         elif self.env.spec.id in self.box_2d_viz_envs:
             if render:
                 eval_env: Env = make_box2d_viz_env(
-                    self.env.spec.id, render_mode="human", continuous=False
+                    self.env.spec.id,
+                    render_mode="human",
+                    continuous=False,
+                    **self.eval_env_kwargs,
                 )
             else:
-                eval_env: Env = make_box2d_viz_env(self.env.spec.id, continuous=False)
+                eval_env: Env = make_box2d_viz_env(
+                    self.env.spec.id,
+                    continuous=False,
+                    **self.eval_env_kwargs,
+                )
             if self.normalize_observation:
                 eval_env = NormalizeObservation(eval_env)
         elif self.env.spec.id in self.melikbugra_envs:
@@ -208,9 +219,16 @@ class BaseAlgorithm(ABC):
                 eval_env = NormalizeObservation(eval_env)
         else:
             if render:
-                eval_env: Env = gym.make(self.env.spec.id, render_mode="human")
+                eval_env: Env = gym.make(
+                    self.env.spec.id,
+                    render_mode="human",
+                    **self.eval_env_kwargs,
+                )
             else:
-                eval_env: Env = gym.make(self.env.spec.id)
+                eval_env: Env = gym.make(
+                    self.env.spec.id,
+                    **self.eval_env_kwargs,
+                )
             if self.normalize_observation:
                 eval_env = NormalizeObservation(eval_env)
 

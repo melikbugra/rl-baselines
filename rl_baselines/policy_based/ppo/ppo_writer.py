@@ -1,0 +1,69 @@
+import numpy as np
+
+from rl_baselines.utils.base_classes import BaseWriter
+from rl_baselines.utils.mlflow_logger import MLFlowLogger
+
+
+class PPOWriter(BaseWriter):
+    def __init__(
+        self, writing_period: int, time_steps: int, mlflow_logger: MLFlowLogger
+    ) -> None:
+        super().__init__(
+            writing_period=writing_period,
+            time_steps=time_steps,
+            mlflow_logger=mlflow_logger,
+        )
+
+        self.table.field_names = [
+            "Time Step",
+            "Average Actor Loss",
+            "Average Critic Loss",
+            "Average Train Score",
+            "Average Evaluation Score",
+            "Time Elapsed (s)",
+        ]
+
+        self.actor_losses: list[float] = []
+        self.critic_losses: list[float] = []
+
+        self.avg_actor_loss: float = 0.0
+        self.avg_critic_loss: float = 0.0
+
+    def reset(self, time_step: int):
+        super().reset(time_step)
+
+    def calculate_averages(self):
+        super().calculate_averages()
+        if len(self.actor_losses) > 0:
+            self.avg_actor_loss = np.mean(self.actor_losses[-100:])
+        else:
+            self.avg_actor_loss = np.nan
+
+        if len(self.critic_losses) > 0:
+            self.avg_critic_loss = np.mean(self.critic_losses[-100:])
+        else:
+            self.avg_critic_loss = np.nan
+
+        self.mlflow_loger.log_metric(
+            "Average Actor Loss",
+            self.avg_actor_loss,
+            step=self.time_step,
+        )
+
+        self.mlflow_loger.log_metric(
+            "Average Critic Loss",
+            self.avg_critic_loss,
+            step=self.time_step,
+        )
+
+    def add_row_to_table(self):
+        self.table.add_row(
+            [
+                f"{self.time_step}/{self.time_steps}",
+                f"{self.avg_actor_loss:.4f}",
+                f"{self.avg_critic_loss:.4f}",
+                f"{self.avg_train_score:.2f}",
+                f"{self.avg_eval_score:.2f}",
+                f"{self.time_elapsed:.2f}",
+            ]
+        )

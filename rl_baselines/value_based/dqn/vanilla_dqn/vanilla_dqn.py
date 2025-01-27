@@ -17,6 +17,7 @@ class VanillaDQN(BaseAlgorithm):
     def __init__(
         self,
         env: Env,
+        eval_env_kwargs: dict = {},
         epsilon_start: float = 1,
         epsilon_end: float = 0.001,
         exploration_percentage: float = 50,
@@ -44,6 +45,7 @@ class VanillaDQN(BaseAlgorithm):
         self.algo_name = "Vanilla-DQN"
         super().__init__(
             env=env,
+            eval_env_kwargs=eval_env_kwargs,
             time_steps=time_steps,
             learning_rate=learning_rate,
             network_type=network_type,

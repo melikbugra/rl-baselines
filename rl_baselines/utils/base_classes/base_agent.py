@@ -21,6 +21,7 @@ class BaseAgent(ABC):
         learning_rate: float = 3e-4,
         device: str = "cpu",
         gradient_clipping_max_norm: float = 1.0,
+        gradient_clipping_value: float = 100,
     ) -> None:
         self.env = env
         self.writer: BaseWriter = writer
@@ -28,6 +29,7 @@ class BaseAgent(ABC):
         self.device: str = device
 
         self.gradient_clipping_max_norm = gradient_clipping_max_norm
+        self.gradient_clipping_value = gradient_clipping_value
 
         self.optimizer = optim.AdamW(
             neural_network.parameters(), lr=learning_rate, amsgrad=True

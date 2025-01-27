@@ -133,3 +133,12 @@ def make_box2d_viz_env(env_name: str, render_mode: str = None, **kwargs):
     env = BufferWrapper(env, 4)
 
     return ScaledFloatFrame(env)
+
+
+def make_classic_env(env_name: str, render_mode: str = None, **kwargs):
+    if render_mode:
+        env: gym.Env = gym.make(env_name, render_mode=render_mode, **kwargs)
+    else:
+        env: gym.Env = gym.make(env_name, **kwargs)
+
+    return env

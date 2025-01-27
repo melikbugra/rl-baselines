@@ -16,6 +16,7 @@ class REINFORCE(BaseAlgorithm):
     def __init__(
         self,
         env: Env,
+        eval_env_kwargs: dict = {},
         gamma: float = 0.99,
         episodes_to_train: int = 16,
         # base algorithm attributes
@@ -31,10 +32,13 @@ class REINFORCE(BaseAlgorithm):
         mlflow_tracking_uri: str = None,
         normalize_observation: bool = False,
         gradient_clipping_max_norm: float = 1.0,
+        log_model: bool = False,
+        render_eval: bool = False,
     ) -> None:
         self.algo_name = "REINFORCE"
         super().__init__(
             env=env,
+            eval_env_kwargs=eval_env_kwargs,
             learning_rate=learning_rate,
             network_type=network_type,
             network_arch=network_arch,
@@ -48,6 +52,8 @@ class REINFORCE(BaseAlgorithm):
             gradient_clipping_max_norm=gradient_clipping_max_norm,
             episodic=True,
             episodes_to_train=episodes_to_train,
+            log_model=log_model,
+            render_eval=render_eval,
         )
 
         if mlflow_tracking_uri and self.algo_name:
@@ -106,7 +112,7 @@ class REINFORCE(BaseAlgorithm):
             "normalize_observation": self.normalize_observation,
         }
         torch.save(model_state, save_path)
-        if self.mlflow_logger.log:
+        if self.log_model:
             self.mlflow_logger.log_artifact(
                 local_path=save_path, artifact_path=self.models_folder
             )
