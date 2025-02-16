@@ -46,16 +46,18 @@ class MLP(BaseNeuralNetwork):
             self.action_type = "continuous"
             self.action_dim = output_neurons[0]
 
-            self.mean_layers: list[nn.Linear] = []
-            self.log_std_layers: list[nn.Linear] = []
+            self.mean_layers: list[nn.Linear] = nn.ModuleList()
+            self.log_std_layers: list[nn.Linear] = nn.ModuleList()
 
             for output_neuron in output_neurons:
                 self.mean_layers.append(
                     nn.Linear(self.layer_neuron_nums[-1], output_neuron)
                 )
-                self.log_std_layers.append(
-                    nn.Linear(self.layer_neuron_nums[-1], output_neuron)
-                )
+                # self.log_std_layers.append(
+                #     nn.Linear(self.layer_neuron_nums[-1], output_neuron)
+                # )
+
+            self.log_std = nn.Parameter(torch.zeros(output_neurons))
 
         # self._initialize_weights()
         self.to(device)
@@ -84,8 +86,10 @@ class MLP(BaseNeuralNetwork):
 
             for i in range(len(self.mean_layers)):
                 mean = self.mean_layers[i](x)
-                log_std = self.log_std_layers[i](x)
-                std = torch.exp(log_std)
+                # raw_log_std = self.log_std_layers[i](x)
+                # log_std = torch.clamp(raw_log_std, min=-20, max=2)
+                # std = torch.exp(log_std)
+                std = torch.exp(self.log_std)
                 outs.append((mean, std))
 
             return outs

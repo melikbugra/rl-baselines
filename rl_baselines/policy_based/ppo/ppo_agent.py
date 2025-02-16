@@ -30,7 +30,7 @@ class PPOAgent(BaseAgent):
         writer: PPOWriter,
         learning_rate: float = None,
         device: str = None,
-        gradient_clipping_value: float = 100,
+        gradient_clipping_max_norm: float = 1.0,
         # optional ppo attributes
         n_epochs: int = 10,
         clip_range: float = 0.2,
@@ -40,7 +40,7 @@ class PPOAgent(BaseAgent):
         super().__init__(
             env=env,
             neural_network=neural_network,
-            gradient_clipping_value=gradient_clipping_value,
+            gradient_clipping_max_norm=gradient_clipping_max_norm,
             writer=writer,
             learning_rate=learning_rate,
             device=device,
@@ -63,7 +63,7 @@ class PPOAgent(BaseAgent):
         self.clip_range = clip_range
         self.batch_size = batch_size
         self.gae_lambda = gae_lambda
-        self.memory_max_size = batch_size * 4
+        self.memory_max_size = batch_size * n_epochs
 
         self.log_probs: list[Tensor] = []
         self.state_values: list[Tensor] = []
@@ -80,7 +80,7 @@ class PPOAgent(BaseAgent):
             log_prob = action_dist.log_prob(action)
             if self.net.training:
                 self.log_probs.append(log_prob.detach())
-                self.state_values.append(state_value.detach())
+                self.state_values.append(state_value[0].detach())
 
             return action
 
@@ -98,7 +98,7 @@ class PPOAgent(BaseAgent):
 
             if self.net.training:
                 self.log_probs.append(sum(action_log_probs.detach()))
-                self.state_values.append(state_value.detach())
+                self.state_values.append(state_value[0].detach())
 
             return torch.tensor(actions, device=self.device, dtype=torch.long)
 
@@ -108,25 +108,29 @@ class PPOAgent(BaseAgent):
             action_range = torch.tensor(
                 (self.env.action_space.high - self.env.action_space.low) / 2.0,
                 dtype=torch.float32,
+                device=self.device,
             )
             action_mid = torch.tensor(
                 (self.env.action_space.high + self.env.action_space.low) / 2.0,
                 dtype=torch.float32,
+                device=self.device,
             )
-            for mean, str in outs:
-                dist = torch.distributions.Normal(mean, str)
+            for mean, std in outs:
+                dist = torch.distributions.Normal(mean, std)
                 action = dist.sample()
                 log_prob = dist.log_prob(action)
                 tanh_action = torch.tanh(action)
                 scaled_action = action_mid + action_range * tanh_action
-                actions.append(scaled_action)
+                actions.append(action)
                 log_probs.append(log_prob)
 
-            if self.net.training:
-                self.log_probs.append(sum(log_probs.detach()))
-                self.state_values.append(state_value.detach())
+            joint_log_prob = torch.stack(log_probs, dim=-1).sum(dim=-1)
 
-            return torch.tensor(actions, device=self.device, dtype=torch.float32)
+            if self.net.training:
+                self.log_probs.append(joint_log_prob.detach())
+                self.state_values.append(state_value[0].detach())
+
+            return torch.stack(actions).to(self.device).float().squeeze(1)
 
     def select_greedy_action(self, state: Tensor, eval: bool = False) -> Tensor:
         if eval:
@@ -195,6 +199,8 @@ class PPOAgent(BaseAgent):
 
             outs, state_values = self.net(states.float())
 
+            state_values = state_values[0]
+
             if self.net.action_type == "discrete":
                 action_probs = torch.softmax(outs[0], dim=-1)
                 action_dist = torch.distributions.Categorical(action_probs)
@@ -211,10 +217,10 @@ class PPOAgent(BaseAgent):
                 new_log_probs = sum(new_log_probs)
             elif self.net.action_type == "continuous":
                 new_log_probs = []
-                for mean, str in outs:
-                    dist = torch.distributions.Normal(mean, str)
-                    new_log_probs.append(dist.log_prob(actions))
-                new_log_probs = sum(new_log_probs)
+                for mean, std in outs:
+                    dist = torch.distributions.Normal(mean, std)
+                    new_log_probs.append(dist.log_prob(actions.squeeze(1)))
+                new_log_probs = torch.stack(new_log_probs, dim=-1).sum(dim=-1)
 
             ratio = torch.exp(new_log_probs - old_log_probs.squeeze(1))
             weighted_log_probs = advantages[mini_batch] * ratio
@@ -222,6 +228,8 @@ class PPOAgent(BaseAgent):
                 torch.clamp(ratio, 1.0 - self.clip_range, 1.0 + self.clip_range)
                 * advantages[mini_batch]
             )
+
+            entropy = dist.entropy().sum(axis=-1).mean()
 
             actor_loss = -torch.min(
                 weighted_log_probs, weighted_clipped_log_probs
@@ -232,7 +240,7 @@ class PPOAgent(BaseAgent):
             critic_loss = (mini_batch_returns - state_values.squeeze(1)) ** 2
             critic_loss = critic_loss.mean()
 
-            total_loss = actor_loss + 0.5 * critic_loss  # *0.5?
+            total_loss = actor_loss + 0.5 * critic_loss - 0.01 * entropy
 
             self.writer.actor_losses.append(actor_loss.item())
             self.writer.critic_losses.append(critic_loss.item())
@@ -242,34 +250,45 @@ class PPOAgent(BaseAgent):
     def compute_returns_advantages(
         self, reward_batch: Tensor, mask_batch: Tensor, next_state_batch: Tensor
     ) -> tuple[Tensor, Tensor]:
-        advantages = np.zeros(len(reward_batch), dtype=np.float32)
+        T = len(reward_batch)
+        advantages = np.zeros(T, dtype=np.float32)
 
-        for t in range(len(reward_batch) - 1):  # TODO: check if -1 needed
+        # Append bootstrap value if needed (for T+1 state values)
+        if len(self.state_values) == T:
+            if mask_batch[-1].item() == 1:
+                last_next_state = next_state_batch[-1].float().unsqueeze(0)
+                _, bootstrap_value = self.net(last_next_state)
+                bootstrap_value = bootstrap_value[0].detach()
+            else:
+                bootstrap_value = torch.zeros(1, device=self.device).unsqueeze(0)
+            self.state_values.append(bootstrap_value)
+
+        for t in range(T):
             discount = 1
             a_t = 0
-            for k in range(t, len(reward_batch) - 1):
-                a_t += discount * (
+            for k in range(t, T):
+                delta = (
                     reward_batch[k].item()
                     + self.gamma
                     * self.state_values[k + 1].item()
                     * mask_batch[k].item()
                     - self.state_values[k].item()
                 )
+                a_t += discount * delta
                 discount *= self.gamma * self.gae_lambda
             advantages[t] = a_t
+
         advantages = torch.tensor(advantages, device=self.device)
-
-        state_values = torch.cat(self.state_values)
-
-        returns = advantages.unsqueeze(1) + state_values
+        state_values = torch.cat(self.state_values)  # expects T+1 values
+        returns = advantages.unsqueeze(1) + state_values[:-1]
 
         return returns, advantages
 
     def update_parameters(self, total_loss: Tensor):
         self.optimizer.zero_grad()
         total_loss.backward()
-        torch.nn.utils.clip_grad_value_(
-            self.net.parameters(), self.gradient_clipping_value
+        torch.nn.utils.clip_grad_norm_(
+            self.net.parameters(), max_norm=self.gradient_clipping_max_norm
         )
         self.optimizer.step()
 

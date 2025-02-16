@@ -11,9 +11,11 @@ from rl_baselines.common.env_wrappers import make_atari_env, make_box2d_viz_env
 
 
 def main():
-    env = gym.make("CartPole-v0")
+    env = gym.make("Pendulum-v1")
+    # env = gym.make("MountainCarContinuous-v0")
+    # env = gym.make("CartPole-v0")
     # env = gym.make(
-    #     "ContinuousMaze-v0", level="level_two", max_steps=2500, random_start=True
+    #     "ContinuousMaze-v0", level="level_one", max_steps=500, random_start=True
     # )
     # env = make_box2d_viz_env("CarRacing-v2", continuous=False)
 
@@ -27,12 +29,12 @@ def main():
 
     model = PPO(
         env=env,
-        time_steps=100_000,
+        time_steps=1_000_000,
         learning_rate=3e-4,
-        network_arch=[128, 256, 128],
-        network_type="mlp",
+        network_arch=[128, 128],
+        network_type="actor_mlp_critic_mlp",
         device="cpu",
-        writing_period=1000,
+        writing_period=10000,
         plot_train_sores=True,
         render_eval=False,
         # mlflow_tracking_uri="http://mlflow.melikbugraozcelik.com/",
@@ -42,8 +44,9 @@ def main():
         gamma=0.99,
         clip_range=0.2,
         gae_lambda=0.95,
-        gradient_clipping_value=100,
-        # eval_env_kwargs={"level": "level_two", "max_steps": 2500, "random_start": True},
+        render=False,
+        gradient_clipping_max_norm=0.5,
+        # eval_env_kwargs={"level": "level_one", "max_steps": 500, "random_start": True},
     )
 
     # model = A2C(

@@ -1,136 +1,224 @@
+#!/usr/bin/env python3
+import gymnasium as gym
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import gymnasium as gym
+from torch.distributions import Normal
 import numpy as np
-
-# 1) Actor ve Critic için tek bir ağ kullanabilir veya iki ayrı ağ tanımlayabilirsiniz.
-#    Burada ortak bir gövde + iki ayrı çıkış tanımı yapacağız (policy ve value).
+from torch.utils.data import DataLoader, TensorDataset
 
 
+# Actor-Critic network with a Gaussian policy
 class ActorCritic(nn.Module):
-    def __init__(self, state_dim=4, hidden_dim=128, action_dim=2):
+    def __init__(self, state_dim, action_dim, hidden_size=64):
         super(ActorCritic, self).__init__()
-        self.fc1 = nn.Linear(state_dim, hidden_dim)
+        self.actor = nn.Sequential(
+            nn.Linear(state_dim, hidden_size),
+            nn.Tanh(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.Tanh(),
+            nn.Linear(hidden_size, action_dim),
+        )
+        self.critic = nn.Sequential(
+            nn.Linear(state_dim, hidden_size),
+            nn.Tanh(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.Tanh(),
+            nn.Linear(hidden_size, 1),
+        )
+        # We'll use a state-independent log_std (initially 0)
+        self.log_std = nn.Parameter(torch.zeros(action_dim))
 
-        # Policy (actor) çıktısı
-        self.policy_head = nn.Linear(hidden_dim, action_dim)
-
-        # Değer fonksiyonu (critic) çıktısı
-        self.value_head = nn.Linear(hidden_dim, 1)
-
-    def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        policy_logits = self.policy_head(x)  # actions için logits
-        value = self.value_head(x)  # durumun değer tahmini
-        return policy_logits, value
-
-
-def select_action(model, state):
-    """
-    Politikadan eylem seçimi (olası eylemleri logit'lerle alıp softmax örnekliyoruz).
-    """
-    state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
-    policy_logits, value = model(state_tensor)
-
-    # Categorical distribution
-    probs = torch.softmax(policy_logits, dim=-1)
-    dist = torch.distributions.Categorical(probs)
-    action = dist.sample()
-
-    return action.item(), dist.log_prob(action), value
+    def forward(self, state):
+        mean = self.actor(state)
+        std = torch.exp(self.log_std)
+        value = self.critic(state)
+        return mean, std, value
 
 
-def train_a2c(env, model, optimizer, gamma=0.99, n_steps=5, max_episodes=1000):
-    """
-    Tek environment üzerinden n-step A2C mantığı:
-    - n adım (ya da done) bekleyip, sonra update.
-    - Actor update => Advantage = R + gamma^n * V(next_state) - V(state)
-    - Critic update => MSE( R + gamma^n * V(next_state), V(state) )
-    """
-    episode_rewards = []
-    state = env.reset()[0]
-    ep_reward = 0
-    done = False
+# Compute advantages and returns using Generalized Advantage Estimation (GAE)
+def compute_gae(rewards, values, dones, last_value, gamma, lam):
+    advantages = []
+    gae = 0
+    # Append last_value to bootstrap the value estimate
+    values = values + [last_value]
+    for t in reversed(range(len(rewards))):
+        # If the episode ended at step t, the next state is terminal (mask=0)
+        mask = 0.0 if dones[t] else 1.0
+        delta = rewards[t] + gamma * values[t + 1] * mask - values[t]
+        gae = delta + gamma * lam * mask * gae
+        advantages.insert(0, gae)
+    returns = [adv + val for adv, val in zip(advantages, values[:-1])]
+    return advantages, returns
 
-    for episode in range(max_episodes):
 
-        # Tek episode'da n-step rollout döngüsü
-        rollout = []  # (state, action, log_prob, value, reward)
-        for t in range(n_steps):
-            action, log_prob, value = select_action(model, state)
-            next_state, reward, done, truncated, info = env.step(action)
-            rollout.append((state, action, log_prob, value, reward))
-
-            state = next_state
-            ep_reward += reward
-
-            if done or truncated:
-                # Episode bitti, kaydet ve resetle
-                episode_rewards.append(ep_reward)
-                state = env.reset()[0]
-                ep_reward = 0
-                break
-
-        # n-step (veya episode bitene kadarki) rollout üzerinden geri yayılım
-        # Son durumun değerini tahmin edelim (bootstrap)
-        if not done and not truncated:
-            with torch.no_grad():
-                _, next_value = model(
-                    torch.tensor(state, dtype=torch.float32).unsqueeze(0)
-                )
-                next_value = next_value.item()
-        else:
-            next_value = 0.0
-
-        # Avantaj ve hedefler (returns) hesaplayalım
-        returns = []
-        advantages = []
-        R = next_value
-
-        for st, ac, lp, val, rew in reversed(rollout):
-            R = rew + gamma * R
-            advantage = R - val.item()
-            returns.insert(0, R)
-            advantages.insert(0, advantage)
-
-        # Actor-Critic güncellemesi
-        policy_loss = []
-        value_loss = []
-
-        for (st, ac, lp, val, rew), G, adv in zip(rollout, returns, advantages):
-            # Actor loss = - log_prob(a) * advantage
-            policy_loss.append(-lp * adv)
-
-            # Critic loss = (G - V(s))^2
-            value_loss.append(nn.functional.mse_loss(val, torch.tensor([[G]])))
-
-        loss = torch.stack(policy_loss).sum() + torch.stack(value_loss).sum()
-
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        if (episode + 1) % 50 == 0:
-            avg_reward = np.mean(episode_rewards[-50:])
-            print(
-                f"Episode {episode+1}/{max_episodes}, avg reward(last 50): {avg_reward:.2f}"
+# PPO update: multiple epochs over mini-batches of collected trajectories
+def ppo_update(
+    policy,
+    optimizer,
+    states,
+    actions,
+    old_log_probs,
+    returns,
+    advantages,
+    clip_param,
+    ppo_epochs,
+    mini_batch_size,
+    value_coef,
+    entropy_coef,
+):
+    dataset = TensorDataset(states, actions, old_log_probs, returns, advantages)
+    loader = DataLoader(dataset, batch_size=mini_batch_size, shuffle=True)
+    for _ in range(ppo_epochs):
+        for batch in loader:
+            (
+                batch_states,
+                batch_actions,
+                batch_old_log_probs,
+                batch_returns,
+                batch_advantages,
+            ) = batch
+            mean, std, values = policy(batch_states)
+            dist = Normal(mean, std)
+            new_log_probs = dist.log_prob(batch_actions).sum(axis=-1)
+            entropy = dist.entropy().sum(axis=-1)
+            # Calculate probability ratio (new/old)
+            ratio = torch.exp(new_log_probs - batch_old_log_probs)
+            surr1 = ratio * batch_advantages
+            surr2 = (
+                torch.clamp(ratio, 1.0 - clip_param, 1.0 + clip_param)
+                * batch_advantages
             )
+            policy_loss = -torch.min(surr1, surr2).mean()
+            value_loss = ((batch_returns - values.squeeze(-1)) ** 2).mean()
+            loss = policy_loss + value_coef * value_loss - entropy_coef * entropy.mean()
 
-    return episode_rewards
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
 
 def main():
-    env = gym.make("CartPole-v1")
-    model = ActorCritic()
-    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    # Use GPU if available
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    rewards_history = train_a2c(
-        env, model, optimizer, gamma=0.99, n_steps=5, max_episodes=100000
-    )
+    # Create the Gymnasium Pendulum environment
+    env = gym.make("Pendulum-v1")
+    state_dim = env.observation_space.shape[0]
+    action_dim = env.action_space.shape[0]
 
-    env.close()
-    print("Training finished. Final average reward:", np.mean(rewards_history[-50:]))
+    # Hyperparameters
+    hidden_size = 64
+    lr = 3e-4
+    num_updates = 1000
+    timesteps_per_batch = 2048
+    ppo_epochs = 10
+    mini_batch_size = 64
+    gamma = 0.99
+    lam = 0.95
+    clip_param = 0.2
+    value_coef = 0.5
+    entropy_coef = 0.01
+
+    policy = ActorCritic(state_dim, action_dim, hidden_size).to(device)
+    optimizer = optim.Adam(policy.parameters(), lr=lr)
+
+    total_steps = 0
+    # Gymnasium's reset returns (observation, info)
+    state, info = env.reset()
+
+    for update in range(1, num_updates + 1):
+        states = []
+        actions = []
+        rewards = []
+        dones = []  # Done flags (True if episode finished)
+        log_probs = []
+        values = []
+
+        batch_steps = 0
+        # Collect experience until we have timesteps_per_batch samples
+        while batch_steps < timesteps_per_batch:
+            state_tensor = torch.FloatTensor(state).to(device)
+            mean, std, value = policy(state_tensor.unsqueeze(0))
+            dist = Normal(mean, std)
+            action = dist.sample()
+            log_prob = dist.log_prob(action).sum(axis=-1)
+            action_np = action.cpu().numpy()[0]
+
+            # Gymnasium step returns (obs, reward, terminated, truncated, info)
+            next_state, reward, terminated, truncated, info = env.step(action_np)
+            done_flag = terminated or truncated
+
+            states.append(state)
+            actions.append(action_np)
+            rewards.append(reward)
+            dones.append(done_flag)
+            log_probs.append(log_prob.detach().cpu().item())
+            values.append(value.item())
+
+            state = next_state
+            batch_steps += 1
+            total_steps += 1
+
+            if done_flag:
+                state, info = env.reset()
+
+        # Compute bootstrap value for the last state
+        state_tensor = torch.FloatTensor(state).to(device)
+        with torch.no_grad():
+            _, _, last_value = policy(state_tensor.unsqueeze(0))
+            last_value = last_value.item()
+
+        # Compute advantages and returns using GAE
+        advantages, returns = compute_gae(
+            rewards, values, dones, last_value, gamma, lam
+        )
+        advantages = torch.FloatTensor(advantages).to(device)
+        returns = torch.FloatTensor(returns).to(device)
+        states = torch.FloatTensor(np.array(states)).to(device)
+        actions = torch.FloatTensor(np.array(actions)).to(device)
+        old_log_probs = torch.FloatTensor(log_probs).to(device)
+
+        # Normalize advantages for better stability
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+        # PPO policy and value function update
+        ppo_update(
+            policy,
+            optimizer,
+            states,
+            actions,
+            old_log_probs,
+            returns,
+            advantages,
+            clip_param,
+            ppo_epochs,
+            mini_batch_size,
+            value_coef,
+            entropy_coef,
+        )
+
+        # Evaluate the current policy every 10 updates
+        if update % 10 == 0:
+            eval_rewards = 0
+            eval_episodes = 5
+            for _ in range(eval_episodes):
+                eval_state, _ = env.reset()
+                done_eval = False
+                episode_reward = 0
+                while not done_eval:
+                    eval_state_tensor = torch.FloatTensor(eval_state).to(device)
+                    # Use the mean action (deterministic) for evaluation
+                    mean, _, _ = policy(eval_state_tensor.unsqueeze(0))
+                    action = mean.cpu().detach().numpy()[0]
+                    eval_state, reward, terminated, truncated, info = env.step(action)
+                    done_eval = terminated or truncated
+                    episode_reward += reward
+                eval_rewards += episode_reward
+            eval_rewards /= eval_episodes
+            print(
+                f"Update {update}, Total Steps {total_steps}, Eval Reward: {eval_rewards:.2f}"
+            )
 
 
 if __name__ == "__main__":

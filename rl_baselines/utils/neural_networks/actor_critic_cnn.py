@@ -71,7 +71,7 @@ class ActorCriticCNN(BaseNeuralNetwork):
         if self.action_type == "discrete":
             action_probs = self.actor_head(x)
             state_value = self.critic_head(x)
-            return [action_probs], state_value
+            return [action_probs], [state_value]
 
         elif self.action_type == "multidiscrete":
             action_probs: list[Tensor] = []

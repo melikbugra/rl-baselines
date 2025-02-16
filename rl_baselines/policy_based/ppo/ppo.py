@@ -6,6 +6,8 @@ import torch
 from rl_baselines.utils.neural_networks import (
     make_actor_critic_mlp,
     make_actor_critic_cnn,
+    make_actor_mlp_critic_mlp,
+    make_actor_cnn_critic_cnn,
 )
 
 
@@ -28,7 +30,7 @@ class PPO(BaseAlgorithm):
         writing_period: int = 10000,
         mlflow_tracking_uri: str = None,
         normalize_observation: bool = False,
-        gradient_clipping_value: float = 1.0,
+        gradient_clipping_max_norm: float = 1.0,
         log_model: bool = False,
         render_eval: bool = False,
         clip_range: float = 0.2,
@@ -51,7 +53,7 @@ class PPO(BaseAlgorithm):
             writing_period=writing_period,
             mlflow_tracking_uri=mlflow_tracking_uri,
             normalize_observation=normalize_observation,
-            gradient_clipping_value=gradient_clipping_value,
+            gradient_clipping_max_norm=gradient_clipping_max_norm,
             log_model=log_model,
             render_eval=render_eval,
         )
@@ -82,6 +84,10 @@ class PPO(BaseAlgorithm):
             neural_network = make_actor_critic_mlp(env, network_arch, device)
         elif network_type == "cnn":
             neural_network = make_actor_critic_cnn(env, device)
+        elif network_type == "actor_mlp_critic_mlp":
+            neural_network = make_actor_mlp_critic_mlp(env, network_arch, device)
+        elif network_type == "actor_cnn_critic_cnn":
+            neural_network = make_actor_cnn_critic_cnn(env, device)
 
         self.agent: PPOAgent = PPOAgent(
             env=env,
@@ -90,7 +96,7 @@ class PPO(BaseAlgorithm):
             batch_size=batch_size,
             learning_rate=learning_rate,
             device=device,
-            gradient_clipping_value=gradient_clipping_value,
+            gradient_clipping_max_norm=gradient_clipping_max_norm,
             neural_network=neural_network,
             clip_range=clip_range,
             gae_lambda=gae_lambda,

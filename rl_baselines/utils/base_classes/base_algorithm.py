@@ -247,7 +247,7 @@ class BaseAlgorithm(ABC):
                 if self.agent.action_type == "discrete":
                     action_to_env = action.item()
                 else:
-                    action_to_env = action
+                    action_to_env = action.cpu().flatten().tolist()
                 observation, reward, terminated, truncated, _ = eval_env.step(
                     action_to_env
                 )
@@ -298,7 +298,7 @@ class BaseAlgorithm(ABC):
             if self.agent.action_type == "discrete":
                 action_to_env = action.item()
             else:
-                action_to_env = action
+                action_to_env = action.cpu().flatten().tolist()
             observation, reward, terminated, truncated, _ = self.env.step(action_to_env)
             episode_score += reward
             reward = torch.tensor([reward], device=self.device)
@@ -359,7 +359,7 @@ class BaseAlgorithm(ABC):
                 if self.agent.action_type == "discrete":
                     action_to_env = action.item()
                 else:
-                    action_to_env = action
+                    action_to_env = action.cpu().flatten().tolist()
                 observation, reward, terminated, truncated, _ = self.env.step(
                     action_to_env
                 )
@@ -406,13 +406,13 @@ class BaseAlgorithm(ABC):
                     break
 
     def state_to_torch(self, state: np.ndarray):
-        if self.network_type == "mlp":
+        if self.network_type == "mlp" or self.network_type == "actor_mlp_critic_mlp":
             return (
                 torch.tensor(state, dtype=torch.float32, device=self.device)
                 .unsqueeze(0)
                 .view(1, -1)
             )
-        elif self.network_type == "cnn":
+        elif self.network_type == "cnn" or self.network_type == "actor_cnn_critic_cnn":
             return torch.tensor(
                 state, dtype=torch.float32, device=self.device
             ).unsqueeze(0)
