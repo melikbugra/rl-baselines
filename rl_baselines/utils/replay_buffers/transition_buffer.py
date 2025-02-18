@@ -27,17 +27,13 @@ class TransitionBuffer:
         self.size = 0
 
     def push(self, transition: Transition):
-        self.state_buffer.append(transition.state.clone().detach())
+        self.state_buffer.append(transition.state)
         self.next_state_buffer.append(
-            transition.next_state.clone().detach()
-            if transition.next_state is not None
-            else None
+            transition.next_state if transition.next_state is not None else None
         )
-        self.action_buffer.append(transition.action.clone().detach().unsqueeze(0))
-        self.reward_buffer.append(transition.reward.clone().detach().unsqueeze(0))
-        self.done_buffer.append(
-            torch.tensor(transition.done, device=self.device).unsqueeze(0)
-        )
+        self.action_buffer.append(transition.action)
+        self.reward_buffer.append(transition.reward)
+        self.done_buffer.append(torch.tensor(transition.done, device=self.device))
 
         self.size += 1
 

@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 import torch
+import numpy as np
 
 from rl_baselines.utils.base_classes.base_neural_network import BaseNeuralNetwork
 
@@ -44,18 +45,9 @@ class MLP(BaseNeuralNetwork):
 
         elif isinstance(output_neurons, tuple):
             self.action_type = "continuous"
-            self.action_dim = output_neurons[0]
+            self.action_dim = np.prod(output_neurons)
 
-            self.mean_layers: list[nn.Linear] = nn.ModuleList()
-            self.log_std_layers: list[nn.Linear] = nn.ModuleList()
-
-            for output_neuron in output_neurons:
-                self.mean_layers.append(
-                    nn.Linear(self.layer_neuron_nums[-1], output_neuron)
-                )
-                # self.log_std_layers.append(
-                #     nn.Linear(self.layer_neuron_nums[-1], output_neuron)
-                # )
+            self.mean_head = nn.Linear(self.layer_neuron_nums[-1], self.action_dim)
 
             self.log_std = nn.Parameter(torch.zeros(output_neurons))
 
@@ -84,13 +76,9 @@ class MLP(BaseNeuralNetwork):
         elif self.action_type == "continuous":
             outs: list[tuple[Tensor, Tensor]] = []
 
-            for i in range(len(self.mean_layers)):
-                mean = self.mean_layers[i](x)
-                # raw_log_std = self.log_std_layers[i](x)
-                # log_std = torch.clamp(raw_log_std, min=-20, max=2)
-                # std = torch.exp(log_std)
-                std = torch.exp(self.log_std)
-                outs.append((mean, std))
+            mean = self.mean_head(x)
+            std = torch.exp(self.log_std)
+            outs.append((mean, std))
 
             return outs
 

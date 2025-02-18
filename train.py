@@ -5,14 +5,14 @@ from rl_baselines.policy_based.cross_entropy import CrossEntropy
 from rl_baselines.value_based.dqn import VanillaDQN, Rainbow
 from rl_baselines.policy_based.reinforce import REINFORCE
 from rl_baselines.policy_based.a2c import A2C
-from rl_baselines.policy_based.ppo.ppo import PPO
+from rl_baselines.policy_based.pppppoooooo.ppo import PPO
 
 from rl_baselines.common.env_wrappers import make_atari_env, make_box2d_viz_env
 
 
 def main():
+    # env = gym.make("BipedalWalker-v3")
     env = gym.make("Pendulum-v1")
-    # env = gym.make("MountainCarContinuous-v0")
     # env = gym.make("CartPole-v0")
     # env = gym.make(
     #     "ContinuousMaze-v0", level="level_one", max_steps=500, random_start=True
@@ -31,7 +31,7 @@ def main():
         env=env,
         time_steps=1_000_000,
         learning_rate=3e-4,
-        network_arch=[128, 128],
+        network_arch=[64, 64],
         network_type="actor_mlp_critic_mlp",
         device="cpu",
         writing_period=10000,
@@ -40,12 +40,15 @@ def main():
         # mlflow_tracking_uri="http://mlflow.melikbugraozcelik.com/",
         log_model=False,
         n_epochs=4,
-        batch_size=5,
+        batch_size=64,
         gamma=0.99,
         clip_range=0.2,
         gae_lambda=0.95,
+        entropy_coef=0.01,
+        value_coef=0.5,
         render=False,
-        gradient_clipping_max_norm=0.5,
+        # gradient_clipping_max_norm=1,
+        normalize_observation=False,
         # eval_env_kwargs={"level": "level_one", "max_steps": 500, "random_start": True},
     )
 

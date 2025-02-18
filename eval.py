@@ -2,7 +2,7 @@ import gymnasium as gym
 
 import continuous_maze_env
 from rl_baselines.policy_based.a2c import A2C
-from rl_baselines.policy_based.ppo.ppo import PPO
+from rl_baselines.policy_based.pppppoooooo.ppo import PPO
 
 
 def main():
@@ -24,7 +24,7 @@ def main():
         # eval_env_kwargs={"level": "level_one", "max_steps": 500, "random_start": True},
     )
     # model = Rainbow(env)
-    model.load("models/Pendulum-v1_PPO_cpu_last.ckpt")
+    model.load("models/Pendulum-v1_PPO_cpu_best_avg.ckpt")
     model.evaluate(render=True, print_episode_score=True)
     env.close()
 

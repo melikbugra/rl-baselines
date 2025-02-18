@@ -20,8 +20,8 @@ class BaseAgent(ABC):
         writer: BaseWriter,
         learning_rate: float = 3e-4,
         device: str = "cpu",
-        gradient_clipping_max_norm: float = 1.0,
-        gradient_clipping_value: float = 100,
+        gradient_clipping_max_norm: float = None,
+        gradient_clipping_value: float = None,
     ) -> None:
         self.env = env
         self.writer: BaseWriter = writer

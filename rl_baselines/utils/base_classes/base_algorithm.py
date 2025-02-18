@@ -41,8 +41,8 @@ class BaseAlgorithm(ABC):
         writing_period: int = 10000,
         mlflow_tracking_uri: str = None,
         normalize_observation: bool = False,
-        gradient_clipping_max_norm: float = 1.0,
-        gradient_clipping_value: float = 100,
+        gradient_clipping_max_norm: float = None,
+        gradient_clipping_value: float = None,
         render_eval: bool = False,
         episodic: bool = False,
         episodes_to_train: int = 16,
@@ -185,6 +185,7 @@ class BaseAlgorithm(ABC):
         print_episode_score: bool = False,
     ):
         self.agent.net.eval()  # Set the model to evaluation mode
+        self.agent.net.training = False
         if self.env.spec.id in self.atari_envs:
             if render:
                 eval_env: Env = make_atari_env(self.env.spec.id, render_mode="human")
@@ -247,7 +248,7 @@ class BaseAlgorithm(ABC):
                 if self.agent.action_type == "discrete":
                     action_to_env = action.item()
                 else:
-                    action_to_env = action.cpu().flatten().tolist()
+                    action_to_env = action.cpu().numpy().flatten().tolist()
                 observation, reward, terminated, truncated, _ = eval_env.step(
                     action_to_env
                 )
@@ -278,6 +279,7 @@ class BaseAlgorithm(ABC):
 
         eval_env.close()
         self.agent.net.train()  # Set the model back to training mode
+        self.agent.net.training = True
         return average_score
 
     def collect_data_iterations(self) -> Iterator[Transition]:
@@ -298,7 +300,7 @@ class BaseAlgorithm(ABC):
             if self.agent.action_type == "discrete":
                 action_to_env = action.item()
             else:
-                action_to_env = action.cpu().flatten().tolist()
+                action_to_env = action.cpu().numpy().flatten()
             observation, reward, terminated, truncated, _ = self.env.step(action_to_env)
             episode_score += reward
             reward = torch.tensor([reward], device=self.device)
@@ -407,11 +409,9 @@ class BaseAlgorithm(ABC):
 
     def state_to_torch(self, state: np.ndarray):
         if self.network_type == "mlp" or self.network_type == "actor_mlp_critic_mlp":
-            return (
-                torch.tensor(state, dtype=torch.float32, device=self.device)
-                .unsqueeze(0)
-                .view(1, -1)
-            )
+            return torch.as_tensor(
+                state, dtype=torch.float32, device=self.device
+            ).unsqueeze(0)
         elif self.network_type == "cnn" or self.network_type == "actor_cnn_critic_cnn":
             return torch.tensor(
                 state, dtype=torch.float32, device=self.device
