@@ -205,6 +205,9 @@ def make_actor_cnn_critic_cnn(env: Env, device: torch.device) -> tuple[CNN, CNN]
     elif isinstance(env.action_space, MultiDiscrete):
         raise Exception("Multidiscrete action is not supported for CNN")
 
+    elif isinstance(env.action_space, Box):
+        output_neurons = env.action_space.shape
+
     actor = CNN(
         input_shape=env.observation_space.shape,
         output_neurons=output_neurons,

@@ -1,6 +1,7 @@
 import numpy as np
 import torch.nn as nn
 import torch
+from torch import Tensor
 
 from rl_baselines.utils.base_classes.base_neural_network import BaseNeuralNetwork
 
@@ -25,23 +26,64 @@ class CNN(BaseNeuralNetwork):
             nn.ReLU(),
         )
 
-        conv_out_size = self._get_conv_out(input_shape)
-        self.fc = nn.Sequential(
-            nn.Linear(conv_out_size, 512), nn.ReLU(), nn.Linear(512, output_neurons)
-        )
+        conv_out_size = self._get_conv_out_size(input_shape)
+
+        if isinstance(output_neurons, int):
+            self.action_type = "discrete"
+            self.action_dim = 1
+            self.fc = nn.Sequential(
+                nn.Linear(conv_out_size, 512), nn.ReLU(), nn.Linear(512, output_neurons)
+            )
+        elif isinstance(output_neurons, list):
+            self.action_type = "multidiscrete"
+            self.action_dim = len(output_neurons)
+            self.heads = nn.ModuleList(
+                [
+                    nn.Sequential(
+                        nn.Linear(conv_out_size, 512),
+                        nn.ReLU(),
+                        nn.Linear(512, output_neurons[i]),
+                    )
+                    for i in range(self.action_dim)
+                ]
+            )
+        elif isinstance(output_neurons, tuple):
+            self.action_type = "continuous"
+            self.action_dim = np.prod(output_neurons)
+            self.fc = nn.Sequential(
+                nn.Linear(conv_out_size, 512),
+                nn.ReLU(),
+                nn.Linear(512, self.action_dim),
+            )
+            self.log_std = nn.Parameter(torch.zeros(output_neurons))
 
         self.to(device)
 
-        self.action_type = "discrete"
-        self.action_dim = 1
-
-    def _get_conv_out(self, shape):
+    def _get_conv_out_size(self, shape):
         o = self.conv(torch.zeros(1, *shape))
         return int(np.prod(o.size()))
 
-    def forward(self, x):
+    def forward(self, x: Tensor):
+        x = x.squeeze(1)
         conv_out = self.conv(x).view(x.size()[0], -1)
-        action_values = self.fc(conv_out)
-        return [
-            action_values
-        ]  # we return this as a list to be compliant with the multidiscrete case, because it returns also a list
+
+        if self.action_type == "discrete":
+            action_values = self.fc(conv_out)
+
+            return [action_values]
+
+        elif self.action_type == "multidiscrete":
+            sub_action_values: list[Tensor] = []
+
+            for head in self.heads:
+                sub_action_values.append(head(conv_out))
+
+            return sub_action_values
+
+        elif self.action_type == "continuous":
+            outs: list[tuple[Tensor, Tensor]] = []
+            mean = self.fc(conv_out)
+            std = torch.exp(self.log_std)
+            outs.append((mean, std))
+
+            return outs

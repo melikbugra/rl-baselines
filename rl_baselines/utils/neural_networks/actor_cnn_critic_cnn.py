@@ -16,6 +16,9 @@ class ActorCNNCriticCNN(BaseNeuralNetwork):
         self.actor_cnn = actor_cnn
         self.critic_cnn = critic_cnn
 
+        self.action_type = actor_cnn.action_type
+        self.action_dim = critic_cnn.action_dim
+
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         action_probs = self.actor_cnn(x)
         value = self.critic_cnn(x)

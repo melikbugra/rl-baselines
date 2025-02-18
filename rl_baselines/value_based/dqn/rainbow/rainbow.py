@@ -44,6 +44,7 @@ class Rainbow(BaseAlgorithm):
         mlflow_tracking_uri: str = None,
         normalize_observation: bool = False,
         gradient_clipping_max_norm: float = 1.0,
+        log_model: bool = False,
         render_eval: bool = False,
         # rainbow
         n_step: int = 3,
@@ -69,6 +70,7 @@ class Rainbow(BaseAlgorithm):
             normalize_observation=normalize_observation,
             gradient_clipping_max_norm=gradient_clipping_max_norm,
             render_eval=render_eval,
+            log_model=log_model,
         )
 
         if mlflow_tracking_uri and self.algo_name:

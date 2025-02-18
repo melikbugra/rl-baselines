@@ -30,7 +30,7 @@ class PPO(BaseAlgorithm):
         writing_period: int = 10000,
         mlflow_tracking_uri: str = None,
         normalize_observation: bool = False,
-        gradient_clipping_max_norm: float = 1.0,
+        gradient_clipping_max_norm: float = None,
         log_model: bool = False,
         render_eval: bool = False,
         clip_range: float = 0.2,

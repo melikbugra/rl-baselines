@@ -30,7 +30,7 @@ class PPOAgent(BaseAgent):
         writer: PPOWriter,
         learning_rate: float = None,
         device: str = None,
-        gradient_clipping_max_norm: float = 1.0,
+        gradient_clipping_max_norm: float = None,
         # optional ppo attributes
         n_epochs: int = 10,
         clip_range: float = 0.2,
@@ -157,9 +157,9 @@ class PPOAgent(BaseAgent):
         if len(self.experience_replay) < self.memory_max_size:
             return
 
-        for _ in range(self.n_epochs):
-            transitions = self.get_transitions()
+        transitions = self.get_transitions()
 
+        for _ in range(self.n_epochs):
             for total_loss in self.compute_loss(*transitions):
                 self.update_parameters(total_loss)
 
@@ -180,12 +180,23 @@ class PPOAgent(BaseAgent):
         done_batch = transitions.done.squeeze().int()
         mask_batch = 1 - done_batch
 
+        advantages, returns = self.compute_returns_advantages(
+            reward_batch, mask_batch, next_state_batch
+        )
+
+        log_probs = torch.tensor(
+            self.log_probs, dtype=torch.float32, device=self.device
+        )
+
         return (
             state_batch,
             next_state_batch,
             action_batch,
             reward_batch,
             mask_batch,
+            advantages,
+            returns,
+            log_probs,
             mini_batches,
         )
 
@@ -196,30 +207,14 @@ class PPOAgent(BaseAgent):
         action_batch: Tensor,
         reward_batch: Tensor,
         mask_batch: Tensor,
+        advantages_tensor: Tensor,
+        returns_tensor: Tensor,
+        log_probs_tensor: Tensor,
         mini_batches: list,
     ):
-        advantages, returns = self.compute_returns_advantages(
-            reward_batch, mask_batch, next_state_batch
-        )
-
-        returns_tensor = torch.as_tensor(
-            np.array(returns), dtype=torch.float32, device=self.device
-        )
-        advantages_tensor = torch.as_tensor(
-            np.array(advantages), dtype=torch.float32, device=self.device
-        )
-        # Normalize advantages.
-        advantages_tensor = (advantages_tensor - advantages_tensor.mean()) / (
-            advantages_tensor.std() + 1e-8
-        )
-
-        log_probs = torch.tensor(
-            self.log_probs, dtype=torch.float32, device=self.device
-        )
-
         for mini_batch in mini_batches:
             states = state_batch[mini_batch]
-            old_log_probs = log_probs[mini_batch]
+            old_log_probs = log_probs_tensor[mini_batch]
             actions = action_batch[mini_batch]
 
             outs, state_values = self.net(states.float())
@@ -281,16 +276,19 @@ class PPOAgent(BaseAgent):
         self, reward_batch: Tensor, mask_batch: Tensor, next_state_batch: Tensor
     ) -> tuple[Tensor, Tensor]:
         if len(self.state_values) == len(reward_batch):
+            # Append last_value to bootstrap the value estimates
             if mask_batch[-1].item() == 1:
-                last_next_state = next_state_batch[-1].float().unsqueeze(0)
+                last_next_state = next_state_batch[-1].float()
                 _, bootstrap_value = self.net(last_next_state)
                 bootstrap_value = bootstrap_value[0].detach()
             else:
-                bootstrap_value = torch.zeros(1, device=self.device).unsqueeze(0)
+                bootstrap_value = torch.zeros(1, device=self.device)
             self.state_values = self.state_values + [bootstrap_value.item()]
+        else:
+            pass
+
         advantages = []
         gae = 0
-        # Append last_value to bootstrap the value estimates
 
         for t in reversed(range(len(reward_batch))):
             mask = mask_batch[t].item()
@@ -302,7 +300,19 @@ class PPOAgent(BaseAgent):
             gae = delta + self.gamma * self.gae_lambda * mask * gae
             advantages.insert(0, gae)
         returns = [adv + val for adv, val in zip(advantages, self.state_values[:-1])]
-        return advantages, returns
+
+        returns_tensor = torch.as_tensor(
+            np.array(returns), dtype=torch.float32, device=self.device
+        )
+        advantages_tensor = torch.as_tensor(
+            np.array(advantages), dtype=torch.float32, device=self.device
+        )
+        # Normalize advantages.
+        advantages_tensor = (advantages_tensor - advantages_tensor.mean()) / (
+            advantages_tensor.std() + 1e-8
+        )
+
+        return advantages_tensor, returns_tensor
 
     def update_parameters(self, total_loss: Tensor):
         self.optimizer.zero_grad()

@@ -11,16 +11,16 @@ from rl_baselines.common.env_wrappers import make_atari_env, make_box2d_viz_env
 
 
 def main():
-    # env = gym.make("BipedalWalker-v3")
-    env = gym.make("Pendulum-v1")
+    # env = gym.make("MountainCarContinuous-v0")
+    # env = gym.make("Pendulum-v1")
     # env = gym.make("CartPole-v0")
     # env = gym.make(
-    #     "ContinuousMaze-v0", level="level_one", max_steps=500, random_start=True
+    #     "ContinuousMaze-v0", level="level_two", max_steps=2500, random_start=True
     # )
-    # env = make_box2d_viz_env("CarRacing-v2", continuous=False)
+    env = make_box2d_viz_env("CarRacing-v2")
 
     # env = make_atari_env("PongNoFrameskip-v4")
-    # env = make_box2d_viz_env("CarRacing-v2", continuous=False)
+    # env = make_box2d_viz_env("CarRacing-v2")
     # env = make_atari_env(
     #     "WorldsHardestGame-v0", fire_reset=False
     # )  # TODO: Implement make custom env
@@ -31,16 +31,17 @@ def main():
         env=env,
         time_steps=1_000_000,
         learning_rate=3e-4,
-        network_arch=[64, 64],
-        network_type="actor_mlp_critic_mlp",
-        device="cpu",
+        # network_arch=[64],
+        network_type="actor_cnn_critic_cnn",
+        device="cuda:0",
         writing_period=10000,
         plot_train_sores=True,
         render_eval=False,
         # mlflow_tracking_uri="http://mlflow.melikbugraozcelik.com/",
         log_model=False,
-        n_epochs=4,
+        n_epochs=10,
         batch_size=64,
+        memory_size=2**8,
         gamma=0.99,
         clip_range=0.2,
         gae_lambda=0.95,
@@ -49,7 +50,7 @@ def main():
         render=False,
         # gradient_clipping_max_norm=1,
         normalize_observation=False,
-        # eval_env_kwargs={"level": "level_one", "max_steps": 500, "random_start": True},
+        # eval_env_kwargs={"level": "level_two", "max_steps": 2500, "random_start": True},
     )
 
     # model = A2C(

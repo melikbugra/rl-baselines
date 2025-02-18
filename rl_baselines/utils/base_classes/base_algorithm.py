@@ -160,7 +160,7 @@ class BaseAlgorithm(ABC):
             ) or episode == self.episodes_to_train - 1:
                 last_avg_eval_score = self.evaluate(
                     episode,
-                    episodes=1,
+                    episodes=5,
                     render=self.render_eval,  # TODO: make episodes a parameter
                 )
                 # For optuna pruning
@@ -198,13 +198,11 @@ class BaseAlgorithm(ABC):
                 eval_env: Env = make_box2d_viz_env(
                     self.env.spec.id,
                     render_mode="human",
-                    continuous=False,
                     **self.eval_env_kwargs,
                 )
             else:
                 eval_env: Env = make_box2d_viz_env(
                     self.env.spec.id,
-                    continuous=False,
                     **self.eval_env_kwargs,
                 )
             if self.normalize_observation:
@@ -300,7 +298,7 @@ class BaseAlgorithm(ABC):
             if self.agent.action_type == "discrete":
                 action_to_env = action.item()
             else:
-                action_to_env = action.cpu().numpy().flatten()
+                action_to_env = action.cpu().numpy().flatten().tolist()
             observation, reward, terminated, truncated, _ = self.env.step(action_to_env)
             episode_score += reward
             reward = torch.tensor([reward], device=self.device)
@@ -361,7 +359,7 @@ class BaseAlgorithm(ABC):
                 if self.agent.action_type == "discrete":
                     action_to_env = action.item()
                 else:
-                    action_to_env = action.cpu().flatten().tolist()
+                    action_to_env = action.cpu().numpy().flatten().tolist()
                 observation, reward, terminated, truncated, _ = self.env.step(
                     action_to_env
                 )
