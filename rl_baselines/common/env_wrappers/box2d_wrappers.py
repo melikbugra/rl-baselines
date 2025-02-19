@@ -56,17 +56,17 @@ class MaxAndSkipEnv(gym.Wrapper[np.ndarray, int, np.ndarray, int]):
 
 
 class ProcessFrame84(gym.ObservationWrapper):
-    def __init__(self, env=None):
+    def __init__(self, env=None, crop: bool = True):
         super(ProcessFrame84, self).__init__(env)
         self.observation_space = gym.spaces.Box(
             low=0, high=255, shape=(84, 84, 1), dtype=np.uint8
         )
+        self.crop = crop
 
     def observation(self, obs):
-        return ProcessFrame84.process(obs)
+        return self.process(obs)
 
-    @staticmethod
-    def process(frame):
+    def process(self, frame):
         if frame.size == 210 * 160 * 3:
             img = np.reshape(frame, [210, 160, 3]).astype(np.float32)
         elif frame.size == 250 * 160 * 3:
@@ -75,13 +75,19 @@ class ProcessFrame84(gym.ObservationWrapper):
             img = np.reshape(frame, [96, 96, 3]).astype(np.float32)
         elif frame.size == 600 * 800 * 3:
             img = np.reshape(frame, [600, 800, 3]).astype(np.float32)
+        elif frame.size == 84 * 84 * 3:
+            img = np.reshape(frame, [84, 84, 3]).astype(np.float32)
         else:
             raise AssertionError(f"Unknown resolution: {frame.shape}")
         img = img[:, :, 0] * 0.299 + img[:, :, 1] * 0.587 + img[:, :, 2] * 0.114
-        resized_screen = cv2.resize(img, (84, 110), interpolation=cv2.INTER_AREA)
-        x_t = resized_screen[18:102, :]
-        x_t = np.reshape(x_t, [84, 84, 1])
-        return x_t.astype(np.uint8)
+        if self.crop:
+            resized_screen = cv2.resize(img, (84, 110), interpolation=cv2.INTER_AREA)
+            x_t = resized_screen[18:102, :]
+            x_t = np.reshape(x_t, [84, 84, 1])
+            return x_t.astype(np.uint8)
+        else:
+            resized_screen = cv2.resize(img, (84, 84), interpolation=cv2.INTER_AREA)
+            return np.reshape(resized_screen, [84, 84, 1]).astype(np.uint8)
 
 
 class ImageToPyTorch(gym.ObservationWrapper):
@@ -125,10 +131,14 @@ class BufferWrapper(gym.ObservationWrapper):
 
 
 def make_box2d_viz_env(env_name: str, render_mode: str = None, **kwargs):
+    melik_envs = ["ContinuousMaze-v0"]
     env = gym.make(env_name, render_mode=render_mode, **kwargs)
 
     env = MaxAndSkipEnv(env)
-    env = ProcessFrame84(env)
+    if env_name in melik_envs:
+        env = ProcessFrame84(env, crop=False)
+    else:
+        env = ProcessFrame84(env, crop=True)
     env = ImageToPyTorch(env)
     env = BufferWrapper(env, 4)
 

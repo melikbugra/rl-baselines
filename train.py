@@ -15,10 +15,12 @@ def main():
     # env = gym.make("Pendulum-v1")
     # env = gym.make("CartPole-v0")
     # env = gym.make(
-    #     "ContinuousMaze-v0", level="level_two", max_steps=2500, random_start=True
+    #     "ContinuousMaze-v0", level="level_one", max_steps=2500, random_start=True
     # )
-    env = make_box2d_viz_env("CarRacing-v2")
-
+    # env = make_box2d_viz_env("CarRacing-v2")
+    env = make_box2d_viz_env(
+        "ContinuousMaze-v0", level="level_two", max_steps=1000, random_start=True
+    )
     # env = make_atari_env("PongNoFrameskip-v4")
     # env = make_box2d_viz_env("CarRacing-v2")
     # env = make_atari_env(
@@ -41,7 +43,7 @@ def main():
         log_model=False,
         n_epochs=10,
         batch_size=64,
-        memory_size=2**8,
+        memory_size=2**11,
         gamma=0.99,
         clip_range=0.2,
         gae_lambda=0.95,
@@ -50,7 +52,7 @@ def main():
         render=False,
         # gradient_clipping_max_norm=1,
         normalize_observation=False,
-        # eval_env_kwargs={"level": "level_two", "max_steps": 2500, "random_start": True},
+        eval_env_kwargs={"level": "level_two", "max_steps": 1000, "random_start": True},
     )
 
     # model = A2C(

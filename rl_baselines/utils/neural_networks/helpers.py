@@ -223,29 +223,3 @@ def make_actor_cnn_critic_cnn(env: Env, device: torch.device) -> tuple[CNN, CNN]
     actor_cnn_critic_cnn = ActorCNNCriticCNN(actor_cnn=actor, critic_cnn=critic)
 
     return actor_cnn_critic_cnn
-
-
-class MultiCategorical:
-    """
-    Wrap a list of independent Categorical distributions (one for each discrete action)
-    and provide a unified interface.
-    """
-
-    def __init__(self, dists):
-        self.dists = dists
-
-    def sample(self):
-        # Sample from each distribution and stack into one tensor.
-        samples = [d.sample() for d in self.dists]
-        # Assume each sample has shape (batch_size,); stack along last dim.
-        return torch.stack(samples, dim=-1)
-
-    def log_prob(self, actions):
-        # Expect actions to be a tensor of shape (..., num_discrete)
-        # Compute the log_prob of each component and sum them.
-        log_probs = [d.log_prob(actions[..., i]) for i, d in enumerate(self.dists)]
-        return sum(log_probs)
-
-    def entropy(self):
-        entropies = [d.entropy() for d in self.dists]
-        return sum(entropies)

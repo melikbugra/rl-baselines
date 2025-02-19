@@ -98,7 +98,7 @@ class BaseAlgorithm(ABC):
             "WorldsHardestGame-v0",
         ]
 
-        self.box_2d_viz_envs: list[str] = ["CarRacing-v2"]
+        self.box_2d_viz_envs: list[str] = ["CarRacing-v2", "ContinuousMaze-v0"]
 
     def train(self, trial: BaseTrial = None) -> float:
         """Train the agent"""
