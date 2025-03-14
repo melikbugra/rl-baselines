@@ -44,13 +44,13 @@ class PPOWriter(BaseWriter):
         else:
             self.avg_critic_loss = np.nan
 
-        self.mlflow_loger.log_metric(
+        self.mlflow_logger.log_metric(
             "Average Actor Loss",
             self.avg_actor_loss,
             step=self.time_step,
         )
 
-        self.mlflow_loger.log_metric(
+        self.mlflow_logger.log_metric(
             "Average Critic Loss",
             self.avg_critic_loss,
             step=self.time_step,

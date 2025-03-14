@@ -5,4 +5,5 @@ from rl_baselines.utils.base_classes.base_experience_replay import (
     BaseExperienceReplay,
     Transition,
 )
+from rl_baselines.utils.base_classes.base_sac_neural_network import BaseSACNeuralNetwork
 from rl_baselines.utils.base_classes.base_writer import BaseWriter

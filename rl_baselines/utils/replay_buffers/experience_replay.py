@@ -22,6 +22,7 @@ class ExperienceReplay(BaseExperienceReplay):
         device: torch.device,
         n_step: int = 1,
         gamma: float = 0.99,
+        action_type: str = "discrete",
     ):
         self.device = device
         self.action_dim = action_dim
@@ -33,9 +34,14 @@ class ExperienceReplay(BaseExperienceReplay):
         )
         # Use None as a placeholder for next_state (next state is None if the episode is terminated)
         self.next_state_buffer: Tensor = [None] * size
-        self.action_buffer: Tensor = torch.zeros(
-            [size, 1, action_dim], dtype=torch.int64, device=device
-        )
+        if action_type == "discrete":
+            self.action_buffer: Tensor = torch.zeros(
+                [size, 1, action_dim], dtype=torch.int64, device=device
+            )
+        elif action_type == "continuous":
+            self.action_buffer: Tensor = torch.zeros(
+                [size, 1, action_dim], dtype=torch.float32, device=device
+            )
         self.reward_buffer: Tensor = torch.zeros(
             [size, 1, 1], dtype=torch.float32, device=device
         )

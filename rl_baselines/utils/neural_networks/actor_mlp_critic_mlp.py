@@ -20,7 +20,7 @@ class ActorMLPCriticMLP(BaseNeuralNetwork):
         self.action_dim = actor_mlp.action_dim
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
-        action_probs = self.actor_mlp(x)
+        mean, std = self.actor_mlp(x)
         value = self.critic_mlp(x)
 
-        return action_probs, value
+        return mean, std, value

@@ -48,10 +48,9 @@ class MLP(BaseNeuralNetwork):
             self.action_dim = np.prod(output_neurons)
 
             self.mean_head = nn.Linear(self.layer_neuron_nums[-1], self.action_dim)
+            self.std_head = nn.Linear(self.layer_neuron_nums[-1], self.action_dim)
 
-            self.log_std = nn.Parameter(torch.zeros(output_neurons))
-
-        # self._initialize_weights()
+        self.apply(self._initialize_weights)
         self.to(device)
 
     def forward(self, state: Tensor):
@@ -77,16 +76,14 @@ class MLP(BaseNeuralNetwork):
             outs: list[tuple[Tensor, Tensor]] = []
 
             mean = self.mean_head(x)
-            std = torch.exp(self.log_std)
+            log_std = self.std_head(x)
+            log_std = torch.clamp(log_std, -20, 2)
+            std = torch.exp(log_std)
             outs.append((mean, std))
 
             return outs
 
-    def _initialize_weights(self):
-        for module in self.modules():
-            if isinstance(module, nn.Linear):
-                nn.init.xavier_uniform_(
-                    module.weight, gain=nn.init.calculate_gain("relu")
-                )
-                if module.bias is not None:
-                    module.bias.data.fill_(0.0)
+    def _initialize_weights(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.xavier_uniform_(m.weight, gain=1.0)
+            nn.init.constant_(m.bias, 0.0)

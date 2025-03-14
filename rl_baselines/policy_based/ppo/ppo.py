@@ -30,14 +30,17 @@ class PPO(BaseAlgorithm):
         writing_period: int = 10000,
         mlflow_tracking_uri: str = None,
         normalize_observation: bool = False,
-        gradient_clipping_max_norm: float = 1.0,
+        gradient_clipping_max_norm: float = None,
         log_model: bool = False,
         render_eval: bool = False,
         clip_range: float = 0.2,
         gae_lambda: float = 0.95,
+        value_coef: float = 0.5,
+        entropy_coef: float = 0.01,
         n_epochs: int = 10,
         gamma: float = 0.99,
-        batch_size: int = 5,
+        memory_size: int = 2048,
+        batch_size: int = 64,
     ) -> None:
         super().__init__(
             env=env,
@@ -67,6 +70,13 @@ class PPO(BaseAlgorithm):
                     "network_arch": network_arch,
                     "experience_replay_type": experience_replay_type,
                     "gamma": gamma,
+                    "clip_range": clip_range,
+                    "gae_lambda": gae_lambda,
+                    "n_epochs": n_epochs,
+                    "batch_size": batch_size,
+                    "value_coef": value_coef,
+                    "entropy_coef": entropy_coef,
+                    "memory_size": memory_size,
                     "device": device,
                     "normalize_observation": normalize_observation,
                 },
@@ -88,6 +98,8 @@ class PPO(BaseAlgorithm):
             neural_network = make_actor_mlp_critic_mlp(env, network_arch, device)
         elif network_type == "actor_cnn_critic_cnn":
             neural_network = make_actor_cnn_critic_cnn(env, device)
+        elif network_type == "actor_critic_cnn":
+            neural_network = make_actor_critic_cnn(env, device)
 
         self.agent: PPOAgent = PPOAgent(
             env=env,
@@ -100,6 +112,9 @@ class PPO(BaseAlgorithm):
             neural_network=neural_network,
             clip_range=clip_range,
             gae_lambda=gae_lambda,
+            value_coef=value_coef,
+            entropy_coef=entropy_coef,
+            memory_size=memory_size,
             gamma=gamma,
             n_epochs=n_epochs,
             time_steps=time_steps,

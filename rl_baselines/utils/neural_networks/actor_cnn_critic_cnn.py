@@ -20,7 +20,7 @@ class ActorCNNCriticCNN(BaseNeuralNetwork):
         self.action_dim = critic_cnn.action_dim
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
-        action_probs = self.actor_cnn(x)
+        mean, std = self.actor_cnn(x)
         value = self.critic_cnn(x)
 
-        return action_probs, value
+        return mean, std, value

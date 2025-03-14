@@ -16,6 +16,9 @@ class CNN(BaseNeuralNetwork):
         super().__init__()
 
         self.network_type: str = "cnn"
+        self.device = device
+
+        self.input_shape = input_shape
 
         self.conv = nn.Sequential(
             nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4),
@@ -25,6 +28,7 @@ class CNN(BaseNeuralNetwork):
             nn.Conv2d(64, 64, kernel_size=3, stride=1),
             nn.ReLU(),
         )
+        self.conv.to(device)
 
         conv_out_size = self._get_conv_out_size(input_shape)
 
@@ -55,12 +59,16 @@ class CNN(BaseNeuralNetwork):
                 nn.ReLU(),
                 nn.Linear(512, self.action_dim),
             )
-            self.log_std = nn.Parameter(torch.zeros(output_neurons))
+            self.std_head = nn.Sequential(
+                nn.Linear(conv_out_size, 512),
+                nn.ReLU(),
+                nn.Linear(512, self.action_dim),
+            )
 
         self.to(device)
 
     def _get_conv_out_size(self, shape):
-        o = self.conv(torch.zeros(1, *shape))
+        o = self.conv(torch.zeros(1, *shape, device=self.device))
         return int(np.prod(o.size()))
 
     def forward(self, x: Tensor):
@@ -82,8 +90,11 @@ class CNN(BaseNeuralNetwork):
 
         elif self.action_type == "continuous":
             outs: list[tuple[Tensor, Tensor]] = []
+
             mean = self.fc(conv_out)
-            std = torch.exp(self.log_std)
+            log_std = self.std_head(conv_out)
+            log_std = torch.clamp(log_std, -20, 2)
+            std = torch.exp(log_std)
             outs.append((mean, std))
 
             return outs

@@ -44,7 +44,7 @@ class DQNWriter(BaseWriter):
         else:
             self.avg_loss = np.nan
 
-        self.mlflow_loger.log_metric(
+        self.mlflow_logger.log_metric(
             "Average Loss",
             self.avg_loss,
             step=self.time_step,

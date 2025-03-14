@@ -1,5 +1,5 @@
 from gymnasium import Env
-from gymnasium.spaces import Discrete, MultiDiscrete
+from gymnasium.spaces import Discrete, MultiDiscrete, Box
 import numpy as np
 import torch
 
@@ -19,6 +19,7 @@ def make_experience_replay(
     n_step: int = 1,
     gamma: float = 0.99,
     network_type: str = "mlp",
+    action_type: str = "discrete",
 ) -> BaseExperienceReplay:
     """Returns the experience replay
 
@@ -37,6 +38,9 @@ def make_experience_replay(
     if isinstance(env.action_space, MultiDiscrete):
         action_dim = len(env.action_space.nvec)
 
+    if isinstance(env.action_space, Box):
+        action_dim = env.action_space.shape[0]
+
     experience_replay = ExperienceReplay(
         state_dim=state_dim,
         action_dim=action_dim,
@@ -45,6 +49,7 @@ def make_experience_replay(
         device=device,
         n_step=n_step,
         gamma=gamma,
+        action_type=action_type,
     )
 
     return experience_replay
@@ -59,6 +64,7 @@ def make_prioritized_experience_replay(
     gamma: float = 0.99,
     network_type: str = "mlp",
     alpha: float = 0.2,
+    action_type: str = "discrete",
 ) -> BaseExperienceReplay:
     """Returns the experience replay
 
@@ -77,6 +83,9 @@ def make_prioritized_experience_replay(
     if isinstance(env.action_space, MultiDiscrete):
         action_dim = len(env.action_space.nvec)
 
+    if isinstance(env.action_space, Box):
+        action_dim = env.action_space.shape[0]
+
     experience_replay = PrioritizedExperienceReplay(
         state_dim=state_dim,
         action_dim=action_dim,
@@ -86,6 +95,7 @@ def make_prioritized_experience_replay(
         n_step=n_step,
         gamma=gamma,
         alpha=alpha,
+        action_type=action_type,
     )
 
     return experience_replay

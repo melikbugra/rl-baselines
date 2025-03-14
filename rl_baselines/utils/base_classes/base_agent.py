@@ -69,6 +69,9 @@ class BaseAgent(ABC):
                 device=self.device,
                 dtype=torch.long,
             ).squeeze()
+        elif self.action_type == "continuous":
+            action = self.env.action_space.sample()
+            return torch.from_numpy(np.array([action])).float().to(self.device)
 
     @abstractmethod
     def select_greedy_action(self, state: Tensor, eval: bool = False) -> Tensor:
@@ -128,7 +131,15 @@ class BaseAgent(ABC):
         """
         pass
 
-    def compute_losses(self):
+    def compute_losses(
+        self,
+        state_batch: Tensor = None,
+        next_state_batch: Tensor = None,
+        action_batch: Tensor = None,
+        reward_batch: Tensor = None,
+        mask_batch: Tensor = None,
+        log_probs_batch: Tensor = None,
+    ):
         """In the future this method will be used by GAN based algorithms that have multiple losses"""
         pass
 

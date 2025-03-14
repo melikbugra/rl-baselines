@@ -12,6 +12,8 @@ from rl_baselines.utils.neural_networks.actor_critic_mlp import ActorCriticMLP
 from rl_baselines.utils.neural_networks.actor_critic_cnn import ActorCriticCNN
 from rl_baselines.utils.neural_networks.actor_mlp_critic_mlp import ActorMLPCriticMLP
 from rl_baselines.utils.neural_networks.actor_cnn_critic_cnn import ActorCNNCriticCNN
+from rl_baselines.utils.neural_networks.sac_network_mlp import SACNetworkMLP
+from rl_baselines.utils.neural_networks.sac_network_cnn import SACNetworkCNN
 
 
 def make_mlp(
@@ -156,6 +158,9 @@ def make_actor_critic_cnn(
     elif isinstance(env.action_space, MultiDiscrete):
         raise Exception("Multidiscrete action is not supported for CNN")
 
+    elif isinstance(env.action_space, Box):
+        output_neurons = env.action_space.shape
+
     neural_network = ActorCriticCNN(
         input_shape=env.observation_space.shape,
         output_neurons=output_neurons,
@@ -223,3 +228,102 @@ def make_actor_cnn_critic_cnn(env: Env, device: torch.device) -> tuple[CNN, CNN]
     actor_cnn_critic_cnn = ActorCNNCriticCNN(actor_cnn=actor, critic_cnn=critic)
 
     return actor_cnn_critic_cnn
+
+
+def make_sac_networks_mlp(env: Env, network_arch, device) -> SACNetworkMLP:
+    """Creates actor and critic networks for SAC"""
+    input_neurons = np.prod(env.observation_space.shape)
+
+    if isinstance(env.action_space, Box):
+        actor = MLP(
+            input_neurons=input_neurons,
+            network_arch=network_arch,
+            output_neurons=env.action_space.shape,
+            device=device,
+        )
+        critic1 = MLP(
+            input_neurons=input_neurons + env.action_space.shape[0],
+            network_arch=network_arch,
+            output_neurons=1,
+            device=device,
+        )
+        critic2 = MLP(
+            input_neurons=input_neurons + env.action_space.shape[0],
+            network_arch=network_arch,
+            output_neurons=1,
+            device=device,
+        )
+        target_critic1 = MLP(
+            input_neurons=input_neurons + env.action_space.shape[0],
+            network_arch=network_arch,
+            output_neurons=1,
+            device=device,
+        )
+        target_critic2 = MLP(
+            input_neurons=input_neurons + env.action_space.shape[0],
+            network_arch=network_arch,
+            output_neurons=1,
+            device=device,
+        )
+
+        target_critic1.load_state_dict(critic1.state_dict())
+        target_critic2.load_state_dict(critic2.state_dict())
+        target_critic1.eval()
+        target_critic2.eval()
+
+        sac_network_mlp = SACNetworkMLP(
+            actor_mlp=actor,
+            critic1_mlp=critic1,
+            critic2_mlp=critic2,
+            target_critic1_mlp=target_critic1,
+            target_critic2_mlp=target_critic2,
+        )
+
+    return sac_network_mlp
+
+
+def make_sac_networks_cnn(env: Env, device) -> SACNetworkCNN:
+    """Creates actor and critic networks for SAC"""
+    input_shape = env.observation_space.shape
+
+    if isinstance(env.action_space, Box):
+        actor = CNN(
+            input_shape=input_shape,
+            output_neurons=env.action_space.shape,
+            device=device,
+        )
+        critic1 = CNN(
+            input_shape=input_shape,
+            output_neurons=1,
+            device=device,
+        )
+        critic2 = CNN(
+            input_shape=input_shape,
+            output_neurons=1,
+            device=device,
+        )
+        target_critic1 = CNN(
+            input_shape=input_shape,
+            output_neurons=1,
+            device=device,
+        )
+        target_critic2 = CNN(
+            input_shape=input_shape,
+            output_neurons=1,
+            device=device,
+        )
+
+        target_critic1.load_state_dict(critic1.state_dict())
+        target_critic2.load_state_dict(critic2.state_dict())
+        target_critic1.eval()
+        target_critic2.eval()
+
+        sac_network_cnn = SACNetworkCNN(
+            actor_cnn=actor,
+            critic1_cnn=critic1,
+            critic2_cnn=critic2,
+            target_critic1_cnn=target_critic1,
+            target_critic2_cnn=target_critic2,
+        )
+
+    return sac_network_cnn

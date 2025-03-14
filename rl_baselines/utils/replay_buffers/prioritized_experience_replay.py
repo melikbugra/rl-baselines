@@ -25,6 +25,7 @@ class PrioritizedExperienceReplay(ExperienceReplay):
         n_step: int = 1,
         gamma: float = 0.99,
         alpha: float = 0.2,
+        action_type: str = "discrete",
     ):
         super().__init__(
             state_dim=state_dim,
@@ -34,6 +35,7 @@ class PrioritizedExperienceReplay(ExperienceReplay):
             device=device,
             n_step=n_step,
             gamma=gamma,
+            action_type=action_type,
         )
         self.max_priority = 1.0
         self.tree_ptr = 0

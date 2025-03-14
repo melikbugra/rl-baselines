@@ -4,8 +4,10 @@ from typing import Any
 import torch.nn as nn
 from torch import Tensor
 
+from rl_baselines.utils.base_classes.base_neural_network import BaseNeuralNetwork
 
-class BaseNeuralNetwork(nn.Module, ABC):
+
+class BaseSACNeuralNetwork(nn.Module, ABC):
     def __init__(self) -> None:
         super().__init__()
 
@@ -13,8 +15,13 @@ class BaseNeuralNetwork(nn.Module, ABC):
         self.action_dim: int
         self.network_type: str
         self.training: bool = True
-        self.input_shape: list[int]
-        self.fc: nn.Sequential = None
+
+        self.actor: BaseNeuralNetwork = None
+        self.critic1: BaseNeuralNetwork = None
+        self.critic2: BaseNeuralNetwork = None
+        self.target_critic1: BaseNeuralNetwork = None
+        self.target_critic2: BaseNeuralNetwork = None
+        self.critic: BaseNeuralNetwork = None
 
     def __call__(self, *args: Any, **kwds: Any) -> Tensor:
         return super().__call__(*args, **kwds)

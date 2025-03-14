@@ -24,7 +24,7 @@ class BaseWriter(ABC):
 
         self.avg_train_score: float = 0.0
 
-        self.mlflow_loger: MLFlowLogger = mlflow_logger
+        self.mlflow_logger: MLFlowLogger = mlflow_logger
 
         self.time_elapsed: float
 

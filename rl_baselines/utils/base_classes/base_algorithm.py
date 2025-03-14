@@ -98,7 +98,7 @@ class BaseAlgorithm(ABC):
             "WorldsHardestGame-v0",
         ]
 
-        self.box_2d_viz_envs: list[str] = ["CarRacing-v2", "ContinuousMaze-v0"]
+        self.box_2d_viz_envs: list[str] = ["CarRacing-v2", "ContinuousMazeViz-v0"]
 
     def train(self, trial: BaseTrial = None) -> float:
         """Train the agent"""
@@ -410,7 +410,11 @@ class BaseAlgorithm(ABC):
             return torch.as_tensor(
                 state, dtype=torch.float32, device=self.device
             ).unsqueeze(0)
-        elif self.network_type == "cnn" or self.network_type == "actor_cnn_critic_cnn":
+        elif self.network_type in [
+            "cnn",
+            "actor_cnn_critic_cnn",
+            "actor_critic_cnn",
+        ]:
             return torch.tensor(
                 state, dtype=torch.float32, device=self.device
             ).unsqueeze(0)

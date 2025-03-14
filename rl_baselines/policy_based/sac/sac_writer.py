@@ -1,10 +1,9 @@
 import numpy as np
-
 from rl_baselines.utils.base_classes import BaseWriter
 from rl_baselines.utils.mlflow_logger import MLFlowLogger
 
 
-class PPOWriter(BaseWriter):
+class SACWriter(BaseWriter):
     def __init__(
         self, writing_period: int, time_steps: int, mlflow_logger: MLFlowLogger
     ) -> None:
@@ -16,8 +15,9 @@ class PPOWriter(BaseWriter):
 
         self.table.field_names = [
             "Time Step",
-            "Average Actor Loss",
-            "Average Critic Loss",
+            "Actor Loss",
+            "Critic Loss",
+            "Alpha Loss",
             "Average Train Score",
             "Average Evaluation Score",
             "Time Elapsed (s)",
@@ -25,9 +25,11 @@ class PPOWriter(BaseWriter):
 
         self.actor_losses: list[float] = []
         self.critic_losses: list[float] = []
+        self.alpha_losses: list[float] = []
 
         self.avg_actor_loss: float = 0.0
         self.avg_critic_loss: float = 0.0
+        self.avg_alpha_loss: float = 0.0
 
     def reset(self, time_step: int):
         super().reset(time_step)
@@ -36,25 +38,22 @@ class PPOWriter(BaseWriter):
         super().calculate_averages()
         if len(self.actor_losses) > 0:
             self.avg_actor_loss = np.mean(self.actor_losses[-100:])
+            self.avg_critic_loss = np.mean(self.critic_losses[-100:])
+            self.avg_alpha_loss = np.mean(self.alpha_losses[-100:])
         else:
             self.avg_actor_loss = np.nan
-
-        if len(self.critic_losses) > 0:
-            self.avg_critic_loss = np.mean(self.critic_losses[-100:])
-        else:
             self.avg_critic_loss = np.nan
+            self.avg_alpha_loss = np.nan
 
-        self.mlflow_loger.log_metric(
-            "Average Actor Loss",
-            self.avg_actor_loss,
-            step=self.time_step,
-        )
+        # Log metrics
+        metrics = {
+            "Average Actor Loss": self.avg_actor_loss,
+            "Average Critic Loss": self.avg_critic_loss,
+            "Average Alpha Loss": self.avg_alpha_loss,
+        }
 
-        self.mlflow_loger.log_metric(
-            "Average Critic Loss",
-            self.avg_critic_loss,
-            step=self.time_step,
-        )
+        for name, value in metrics.items():
+            self.mlflow_logger.log_metric(name, value, step=self.time_step)
 
     def add_row_to_table(self):
         self.table.add_row(
@@ -62,6 +61,7 @@ class PPOWriter(BaseWriter):
                 f"{self.time_step}/{self.time_steps}",
                 f"{self.avg_actor_loss:.4f}",
                 f"{self.avg_critic_loss:.4f}",
+                f"{self.avg_alpha_loss:.4f}",
                 f"{self.avg_train_score:.2f}",
                 f"{self.avg_eval_score:.2f}",
                 f"{self.time_elapsed:.2f}",
