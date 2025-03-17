@@ -107,11 +107,16 @@ class SAC(BaseAlgorithm):
             learning_starts=learning_starts,
         )
 
-    def save(self, folder: str, checkpoint=""):
-        env_name = self.env.spec.id
-        folder: Path = Path(folder)
-        save_path = folder / f"{env_name}_{self.algo_name}_{self.device}_{checkpoint}"
-        save_path = save_path.with_suffix(".ckpt")
+    def save(self, folder: str = None, checkpoint="", save_path=None):
+        if save_path:
+            save_path = Path(save_path).with_suffix(".ckpt")
+        else:
+            env_name = self.env.spec.id
+            folder: Path = Path(folder)
+            save_path = (
+                folder / f"{env_name}_{self.algo_name}_{self.device}_{checkpoint}"
+            )
+            save_path = save_path.with_suffix(".ckpt")
         model_state = {
             # Model architecture and metadata
             "state_dict": self.agent.net.state_dict(),
@@ -143,11 +148,22 @@ class SAC(BaseAlgorithm):
                 local_path=save_path, artifact_path=self.models_folder
             )
 
-    def load(self, folder: str, checkpoint: str, eval_mode: bool = True):
-        env_name = self.env.spec.id
-        folder: Path = Path(folder)
-        model_path = folder / f"{env_name}_{self.algo_name}_{self.device}_{checkpoint}"
-        model_path = model_path.with_suffix(".ckpt")
+    def load(
+        self,
+        folder: str = None,
+        checkpoint: str = "",
+        eval_mode: bool = True,
+        model_path=None,
+    ):
+        if model_path:
+            model_path = Path(model_path).with_suffix(".ckpt")
+        else:
+            env_name = self.env.spec.id
+            folder: Path = Path(folder)
+            model_path = (
+                folder / f"{env_name}_{self.algo_name}_{self.device}_{checkpoint}"
+            )
+            model_path = model_path.with_suffix(".ckpt")
         loaded_model = torch.load(model_path, map_location=self.device)
 
         # Only recreate the neural network if needed

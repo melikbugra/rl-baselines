@@ -11,18 +11,22 @@ def main():
     # env = gym.make(
     #     "ContinuousMaze-v0", level="level_two", max_steps=250, random_start=False
     # )
-    # env = make_box2d_viz_env(
-    #     "ContinuousMazeViz-v0", level="level_one", max_steps=500, random_start=True
-    # )
+    env = make_box2d_viz_env(
+        "ContinuousMazeViz-v0", level="level_three", max_steps=2500, random_start=False
+    )
     # env = gym.make("Pendulum-v1")
     # env = make_atari_env("ALE/MarioBros-v5", render_mode="human")
     # env = gym.make("PongNoFrameskip-v4", render_mode="human")
-    env = make_box2d_viz_env("CarRacing-v2")
+    # env = make_box2d_viz_env("CarRacing-v2")
     # env.reset()
     # env.step(1)
     model = SAC(
         env,
-        # eval_env_kwargs={"level": "level_one", "max_steps": 250, "random_start": False},
+        eval_env_kwargs={
+            "level": "level_three",
+            "max_steps": 2500,
+            "random_start": False,
+        },
         experience_replay_size=512,
         device="cuda:0",
     )

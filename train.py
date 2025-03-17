@@ -15,10 +15,10 @@ def main():
     # env = gym.make("MountainCarContinuous-v0")
     # env = gym.make("Pendulum-v1")
     # env = gym.make("CartPole-v0")
-    # env = gym.make(
-    #     "ContinuousMaze-v0", level="level_one", max_steps=250, random_start=False
-    # )
-    env = make_box2d_viz_env("CarRacing-v2")
+    env = gym.make(
+        "ContinuousMaze-v0", level="level_three", max_steps=2500, random_start=True
+    )
+    # env = make_box2d_viz_env("CarRacing-v2")
     # env = make_box2d_viz_env(
     #     "ContinuousMazeViz-v0", level="level_one", max_steps=259, random_start=True
     # )
@@ -35,8 +35,8 @@ def main():
         time_steps=1_000_000,
         experience_replay_type="er",
         learning_rate=3e-4,
-        network_type="cnn",
-        # network_arch=[128, 128],
+        network_type="mlp",
+        network_arch=[256, 256],
         render=False,
         device="cpu",
         plot_train_sores=True,

@@ -6,50 +6,7 @@ from rl_baselines.utils.base_classes.base_experience_replay import Transition
 import numpy as np
 from rl_baselines.common.env_wrappers import make_atari_env, make_box2d_viz_env
 import tqdm
-
-
-def get_adversary_reward(state, protagonist: SAC):
-    state_tensor = torch.tensor(
-        state, dtype=torch.float32, device=protagonist.device
-    ).unsqueeze(0)
-
-    v_values = []
-    with torch.no_grad():
-        for _ in range(10):
-            outs, _, _, _, _ = protagonist.agent.net(
-                state=state_tensor, actor_pass=True
-            )
-            mean, std = outs[0]
-
-            noise = torch.randn_like(mean)
-            z = mean + std * noise
-            action = torch.tanh(z) * protagonist.agent.max_action
-
-            # Get Q-values for the sampled action
-            _, q1, q2, _, _ = protagonist.agent.net(
-                state=state_tensor, action=action, critic_pass=True
-            )
-
-            # Use minimum Q-value (as in SAC)
-            min_q = torch.min(q1, q2)
-
-            # Calculate log probability of action
-            log_prob_gauss = -0.5 * (
-                ((z - mean) / std) ** 2 + 2 * torch.log(std) + np.log(2 * np.pi)
-            )
-            log_prob_gauss = log_prob_gauss.sum(dim=-1, keepdim=True)
-            log_prob_policy = log_prob_gauss - (
-                1 - torch.tanh(z) ** 2 + 1e-6
-            ).log().sum(dim=-1, keepdim=True)
-
-            # V(s) = Q(s,a) - α * log_prob(a|s)
-            alpha = torch.exp(protagonist.agent.log_alpha)
-            v_value = min_q - alpha * log_prob_policy
-            v_values.append(v_value)
-
-    # Average the sampled V-values
-    v_est = torch.mean(torch.stack(v_values), dim=0)
-    return -v_est.cpu().item()
+from rl_baselines.utils import MLFlowLogger
 
 
 def state_to_torch(state: np.ndarray, device: str) -> torch.Tensor:
@@ -59,10 +16,15 @@ def state_to_torch(state: np.ndarray, device: str) -> torch.Tensor:
 
 
 def train():
+
+    mlflow_logger = MLFlowLogger(
+        mlflow_tracking_uri="https://mlflow.melikbugraozcelik.com/"
+    )
+
     MAX_STEPS = 1000
     Ka = 10
     Kp = 10
-    N = 100
+    N = 1000
     Ha = MAX_STEPS // 4
     Hp = (MAX_STEPS // 4) * 3
 
@@ -86,9 +48,9 @@ def train():
         learning_rate=3e-4,
         network_type="mlp",
         device="cpu",
-        learning_starts=0,
-        experience_replay_size=10000,
-        network_arch=[32, 32],
+        learning_starts=100000,
+        # experience_replay_size=10000,
+        network_arch=[128, 128],
     )
 
     protagonist = SAC(
@@ -96,9 +58,26 @@ def train():
         learning_rate=3e-4,
         network_type="mlp",
         device="cpu",
-        learning_starts=0,
-        experience_replay_size=10000,
-        network_arch=[32, 32],
+        learning_starts=100000,
+        # experience_replay_size=10000,
+        network_arch=[128, 128],
+    )
+
+    mlflow_logger.define_experiment_and_run(
+        params_to_log={
+            "max_steps": MAX_STEPS,
+            "N": N,
+            "Ka": Ka,
+            "Kp": Kp,
+            "Ha": Ha,
+            "Hp": Hp,
+            "device": "cpu",
+            "learning_rate": 3e-4,
+            "network_type": "mlp",
+            "network_arch": [128, 128],
+        },
+        env=env,
+        algo_name="Adversarial SAC",
     )
 
     for i in tqdm.tqdm(
@@ -108,9 +87,10 @@ def train():
         bar_format="{desc}: {percentage:1.0f}%|{bar:50}| {n_fmt}/{total_fmt} [ETA: {remaining}, {rate_fmt}]",
         colour="green",
     ):
-        if i % 10 == 0:
+        total_steps = 0
+        if i % 10 == 0 and i != 0:
             render = True
-        if (i + 1) % 5 == 0:
+        else:
             render = False
 
         adv_train_pbar = tqdm.tqdm(
@@ -138,6 +118,8 @@ def train():
             )
             adv_score = 0
             for j in adv_play_pbar:
+                total_steps += 1
+                adv_terminates = False
                 action = adversary.agent.select_action(state)
                 if adversary.agent.action_type == "discrete":
                     action_to_env = action.item()
@@ -146,7 +128,8 @@ def train():
                 observation, _, terminated, truncated, _ = env.step(action_to_env)
                 if render:
                     env.render()
-                reward = get_adversary_reward(observation, protagonist)
+                # reward = get_adversary_reward(observation, protagonist)
+                reward = 0
                 adv_score += reward
                 # tqdm.tqdm.write(f"Adversary reward: {reward}")
                 reward = torch.tensor([reward], device=adversary.device)
@@ -155,24 +138,46 @@ def train():
                 else:
                     next_state = state_to_torch(observation, device=adversary.device)
                 done = terminated or truncated
-                transition = Transition(
-                    state=state,
-                    action=action,
-                    next_state=next_state,
-                    reward=reward,
-                    done=done,
-                )
+                if j == Ha - 1:
+                    last_adv_state = state
+                    last_adv_action = action
+                    last_adv_next_state = next_state
+                    last_adv_done = done
+                else:
+                    transition = Transition(
+                        state=state,
+                        action=action,
+                        next_state=next_state,
+                        reward=reward,
+                        done=done,
+                    )
 
-                adversary.agent.experience_replay.push(
-                    transition=transition,
-                )
+                    adversary.agent.experience_replay.push(
+                        transition=transition,
+                    )
                 adversary.agent.optimize_model(time_step=i)
+
                 if terminated:
-                    # i = 0
-                    state, _ = env.reset()
-                    state = state_to_torch(state, device=adversary.device)
+                    adv_terminates = True
+                    reward = -1
+                    adv_score += reward
+                    reward = torch.tensor([reward], device=adversary.device)
+                    transition = Transition(
+                        state=state,
+                        action=action,
+                        next_state=next_state,
+                        reward=reward,
+                        done=done,
+                    )
+                    adversary.agent.experience_replay.push(
+                        transition=transition,
+                    )
+
                     # print(f"Random adversary terminated episode at step {i}, restarting...")
-            adv_scores.append(adv_score)
+                if not done:
+                    state = next_state
+                else:
+                    break
 
             # print("Protagonist plays...")
             prt_score = 0
@@ -186,6 +191,7 @@ def train():
                 colour="blue",
             )
             for k in protagonist_play_pbar:
+                total_steps += 1
                 action = protagonist.agent.select_greedy_action(state)
                 if protagonist.agent.action_type == "discrete":
                     action_to_env = action.item()
@@ -213,9 +219,61 @@ def train():
                 # protagonist.agent.experience_replay.push(
                 #     transition=transition,
                 # )
-                if done:
+                if not done:
+                    state = next_state
+                else:
+                    if not adv_terminates:
+                        last_adv_reward = -prt_score
+                        adv_score += last_adv_reward
+                        adv_scores.append(adv_score)
+                        last_adv_reward = torch.tensor(
+                            [last_adv_reward], device=adversary.device
+                        )
+
+                        last_adv_transition = Transition(
+                            state=last_adv_state,
+                            action=last_adv_action,
+                            next_state=last_adv_next_state,
+                            reward=last_adv_reward,
+                            done=last_adv_done,
+                        )
+
+                        adversary.agent.experience_replay.push(
+                            transition=last_adv_transition,
+                        )
                     break
             prt_scores.append(prt_score)
+
+            mlflow_logger.log_metric(
+                key="adv_train_prt_score",
+                value=prt_score,
+                step=total_steps,
+            )
+            mlflow_logger.log_metric(
+                key="adv_train_adv_score",
+                value=adv_score,
+                step=total_steps,
+            )
+            mlflow_logger.log_metric(
+                key="adv_train_adv_actor_loss",
+                value=adversary.agent.writer.avg_actor_loss,
+                step=total_steps,
+            )
+            mlflow_logger.log_metric(
+                key="adv_train_adv_critic_loss",
+                value=adversary.agent.writer.avg_critic_loss,
+                step=total_steps,
+            )
+            mlflow_logger.log_metric(
+                key="adv_train_prt_actor_loss",
+                value=protagonist.agent.writer.avg_actor_loss,
+                step=total_steps,
+            )
+            mlflow_logger.log_metric(
+                key="adv_train_prt_critic_loss",
+                value=protagonist.agent.writer.avg_critic_loss,
+                step=total_steps,
+            )
 
         tqdm.tqdm.write(
             f"\tMean protagonist score: {sum(prt_scores) / len(prt_scores)}"
@@ -237,6 +295,7 @@ def train():
         prt_scores = []
         adv_scores = []
         for y in protagonist_train_pbar:
+            adv_terminates = False
             state, _ = env.reset()
             state = state_to_torch(state, device=protagonist.device)
             adv_play_pbar = tqdm.tqdm(
@@ -249,6 +308,7 @@ def train():
             )
             adv_score = 0
             for l in adv_play_pbar:
+                total_steps += 1
                 action = adversary.agent.select_greedy_action(state)
                 if adversary.agent.action_type == "discrete":
                     action_to_env = action.item()
@@ -257,7 +317,7 @@ def train():
                 observation, _, terminated, truncated, _ = env.step(action_to_env)
                 if render:
                     env.render()
-                reward = get_adversary_reward(observation, protagonist)
+                reward = 0
                 adv_score += reward
                 # reward = torch.tensor([reward], device=protagonist.device)
                 # if terminated:
@@ -280,11 +340,16 @@ def train():
                 # )
 
                 if terminated:
-                    # i = 0
-                    state, _ = env.reset()
-                    state = state_to_torch(state, device=protagonist.device)
+                    adv_terminates = True
+                    reward = -1
+                    adv_score += reward
+                    adv_scores.append(adv_score)
+                    break
                     # print(f"Random adversary terminated episode at step {i}, restarting...")
-            adv_scores.append(adv_score)
+                if not done:
+                    state = next_state
+                else:
+                    break
 
             # # # print("Protagonist plays...")
             prt_score = 0
@@ -297,6 +362,7 @@ def train():
                 colour="blue",
             )
             for m in protagonist_play_pbar:
+                total_steps += 1
                 action = protagonist.agent.select_action(state)
                 if protagonist.agent.action_type == "discrete":
                     action_to_env = action.item()
@@ -324,10 +390,48 @@ def train():
                     transition=transition,
                 )
                 protagonist.agent.optimize_model(time_step=i)
-                if done:
+                if not done:
+                    state = next_state
+                else:
+                    if not adv_terminates:
+                        last_adv_reward = -prt_score
+                        adv_score += last_adv_reward
+                        adv_scores.append(adv_score)
                     break
 
             prt_scores.append(prt_score)
+
+            mlflow_logger.log_metric(
+                key="prt_train_prt_score",
+                value=prt_score,
+                step=total_steps,
+            )
+            mlflow_logger.log_metric(
+                key="prt_train_adv_score",
+                value=adv_score,
+                step=total_steps,
+            )
+            mlflow_logger.log_metric(
+                key="prt_train_adv_actor_loss",
+                value=adversary.agent.writer.avg_actor_loss,
+                step=total_steps,
+            )
+            mlflow_logger.log_metric(
+                key="prt_train_adv_critic_loss",
+                value=adversary.agent.writer.avg_critic_loss,
+                step=total_steps,
+            )
+            mlflow_logger.log_metric(
+                key="prt_train_prt_actor_loss",
+                value=protagonist.agent.writer.avg_actor_loss,
+                step=total_steps,
+            )
+            mlflow_logger.log_metric(
+                key="prt_train_prt_critic_loss",
+                value=protagonist.agent.writer.avg_critic_loss,
+                step=total_steps,
+            )
+
         tqdm.tqdm.write(
             f"\tMean protagonist score: {sum(prt_scores) / len(prt_scores)}"
         )
@@ -336,8 +440,17 @@ def train():
             f"\tMean adversary score: {sum(adv_scores) / len(adv_scores)}\n"
         )
 
-    adversary.save(folder="models", checkpoint="last")
-    protagonist.save(folder="models", checkpoint="last")
+        if i % 10 == 0 and i != 0:
+            adversary.save(save_path=f"models/adversary_sac_{i}")
+            protagonist.save(save_path=f"models/protagonist_sac_{i}")
+            mlflow_logger.log_artifact(
+                local_path=f"models/adversary_sac_{i}.ckpt",
+                artifact_path="models",
+            )
+            mlflow_logger.log_artifact(
+                local_path=f"models/protagonist_sac_{i}.ckpt",
+                artifact_path="models",
+            )
 
 
 if __name__ == "__main__":

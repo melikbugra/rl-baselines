@@ -39,7 +39,7 @@ class MLFlowLogger:
             for param_name, param in params_to_log.items():
                 mlflow.log_param(param_name, param)
 
-    def log_artifact(self, local_path: str, artifact_path: str = None):
+    def log_artifact(self, local_path: str, artifact_path: str = "models"):
         if self.log:
             if not artifact_path:
                 artifact_path = ""
