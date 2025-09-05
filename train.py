@@ -1,6 +1,13 @@
+"""Training script showcasing different reinforcement learning algorithms.
+
+Uncomment the sections below to experiment with various environments and
+algorithms. The default configuration trains a Soft Actor-Critic (SAC) agent
+on a custom ``ContinuousMaze`` environment.
+"""
+
 import gymnasium as gym
 
-import continuous_maze_env
+import continuous_maze_env  # noqa: F401 - used to register the environment
 from rl_baselines.policy_based.cross_entropy import CrossEntropy
 from rl_baselines.value_based.dqn import VanillaDQN, Rainbow
 from rl_baselines.policy_based.reinforce import REINFORCE
@@ -10,8 +17,11 @@ from rl_baselines.policy_based.sac.sac import SAC
 
 from rl_baselines.common.env_wrappers import make_atari_env, make_box2d_viz_env
 
-
 def main():
+    """Instantiate the environment, train an agent and save the result."""
+
+    # Create the training environment. Comment or uncomment the lines below to
+    # switch to other built-in Gymnasium environments or custom ones.
     # env = gym.make("MountainCarContinuous-v0")
     # env = gym.make("Pendulum-v1")
     # env = gym.make("CartPole-v0")
@@ -30,6 +40,9 @@ def main():
 
     env.reset()
 
+    # Initialize the agent. The default choice is a Soft Actor-Critic model; other
+    # algorithms are provided below as commented examples with their typical
+    # hyperparameters.
     model = SAC(
         env=env,
         time_steps=1_000_000,
@@ -166,7 +179,10 @@ def main():
     #     env_seed=99,
     #     render_eval=True,
     # )
+    # Kick off the training loop using the selected configuration.
     model.train()
+
+    # Persist the trained model to disk for later evaluation or reuse.
     model.save(folder="models", checkpoint="last")
 
 
