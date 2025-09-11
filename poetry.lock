@@ -462,8 +462,10 @@ opencv-python = "^4.10.0.84"
 pyglet = "2.0.18"
 
 [package.source]
-type = "directory"
-url = "../continuous-maze"
+type = "git"
+url = "https://github.com/melikbugra/continuous-maze-env.git"
+reference = "HEAD"
+resolved_reference = "8b8f55eb0ba3934eda92fdbaf02760af106ad525"
 
 [[package]]
 name = "contourpy"
@@ -3812,4 +3814,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "dc1ae78a1961f370c01cb050365bfd5095145c4ad5516e0e5dae676ad30143b3"
+content-hash = "d88ba768c32af2df52ad91b19a039182c56099d370501cdef1305bc4f80c967f"
