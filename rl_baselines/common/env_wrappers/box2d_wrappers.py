@@ -131,14 +131,14 @@ class BufferWrapper(gym.ObservationWrapper):
 
 
 def make_box2d_viz_env(env_name: str, render_mode: str = None, **kwargs):
-    melik_envs = ["ContinuousMaze-v0"]
+    melik_envs = ["ContinuousMazeViz-v0"]
     env = gym.make(env_name, render_mode=render_mode, **kwargs)
 
-    env = MaxAndSkipEnv(env)
     if env_name in melik_envs:
         env = ProcessFrame84(env, crop=False)
     else:
         env = ProcessFrame84(env, crop=True)
+        env = MaxAndSkipEnv(env)
     env = ImageToPyTorch(env)
     env = BufferWrapper(env, 4)
 

@@ -16,7 +16,7 @@ def main():
     # env = gym.make("Pendulum-v1")
     # env = gym.make("CartPole-v0")
     env = gym.make(
-        "ContinuousMaze-v0", level="level_three", max_steps=2500, random_start=True
+        "ContinuousMaze-v0", level="level_one", max_steps=250, random_start=False
     )
     # env = make_box2d_viz_env("CarRacing-v2")
     # env = make_box2d_viz_env(
@@ -28,53 +28,58 @@ def main():
     #     "WorldsHardestGame-v0", fire_reset=False
     # )  # TODO: Implement make custom env
 
+    # env = make_atari_env(
+    #     "PongNoFrameskip-v4",
+    #     fire_reset=False,
+    # )
+
     env.reset()
 
-    model = SAC(
-        env=env,
-        time_steps=1_000_000,
-        experience_replay_type="er",
-        learning_rate=3e-4,
-        network_type="mlp",
-        network_arch=[256, 256],
-        render=False,
-        device="cpu",
-        plot_train_sores=True,
-        writing_period=1000,
-        tau=0.005,
-        gamma=0.99,
-        batch_size=256,
-        # experience_replay_size=20000,
-        target_entropy=-1.0,
-        learning_starts=1000,
-        # eval_env_kwargs={"level": "level_one", "max_steps": 250, "random_start": False},
-    )
-
-    # model = PPO(
+    # model = SAC(
     #     env=env,
     #     time_steps=1_000_000,
+    #     experience_replay_type="er",
     #     learning_rate=3e-4,
-    #     # network_arch=[64],
-    #     network_type="actor_critic_cnn",
-    #     device="cuda:0",
-    #     writing_period=10000,
-    #     plot_train_sores=True,
-    #     render_eval=False,
-    #     # mlflow_tracking_uri="http://mlflow.melikbugraozcelik.com/",
-    #     log_model=False,
-    #     n_epochs=10,
-    #     batch_size=64,
-    #     memory_size=2**5,
-    #     gamma=0.99,
-    #     clip_range=0.2,
-    #     gae_lambda=0.95,
-    #     entropy_coef=0.01,
-    #     value_coef=0.5,
+    #     network_type="mlp",
+    #     network_arch=[128, 128],
     #     render=False,
-    #     # gradient_clipping_max_norm=1,
-    #     normalize_observation=False,
-    #     eval_env_kwargs={"level": "level_one", "max_steps": 500, "random_start": True},
+    #     device="cpu",
+    #     plot_train_sores=True,
+    #     writing_period=1000,
+    #     tau=0.005,
+    #     gamma=0.99,
+    #     batch_size=256,
+    #     # experience_replay_size=20000,
+    #     target_entropy=-1.0,
+    #     learning_starts=1000,
+    #     eval_env_kwargs={"level": "level_one", "max_steps": 250, "random_start": False},
     # )
+
+    model = PPO(
+        env=env,
+        time_steps=1_000_000,
+        learning_rate=3e-4,
+        # network_arch=[64],
+        network_type="actor_critic_mlp",
+        device="cuda:0",
+        writing_period=100,
+        plot_train_sores=True,
+        render_eval=False,
+        # mlflow_tracking_uri="http://mlflow.melikbugraozcelik.com/",
+        log_model=False,
+        n_epochs=10,
+        batch_size=64,
+        memory_size=2**5,
+        gamma=0.99,
+        clip_range=0.2,
+        gae_lambda=0.95,
+        entropy_coef=0.01,
+        value_coef=0.5,
+        render=False,
+        # gradient_clipping_max_norm=1,
+        normalize_observation=False,
+        eval_env_kwargs={"level": "level_one", "max_steps": 500, "random_start": True},
+    )
 
     # model = A2C(
     #     env=env,
