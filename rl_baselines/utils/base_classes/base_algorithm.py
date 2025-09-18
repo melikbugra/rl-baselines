@@ -328,12 +328,13 @@ class BaseAlgorithm(ABC):
             episode_score += reward
             reward = torch.tensor([reward], device=self.device)
 
+            bootstrap_done = terminated
+            episode_done = terminated or truncated
+
             if terminated:
                 next_state = None
             else:
                 next_state = self.state_to_torch(observation)
-
-            done = terminated or truncated
 
             # Store the transition in memory
             transition = Transition(
@@ -341,13 +342,13 @@ class BaseAlgorithm(ABC):
                 action=action,
                 next_state=next_state,
                 reward=reward,
-                done=done,
+                done=bootstrap_done,
             )
             yield time_step, transition
 
             state = next_state
 
-            if done:
+            if episode_done:
                 self.writer.train_scores.append(episode_score)
                 self.train_scores.append(episode_score)
                 self.mlflow_logger.log_metric(
@@ -376,7 +377,7 @@ class BaseAlgorithm(ABC):
         episode_score = 0
 
         for episode in range(self.episodes_to_train):
-            done = False
+            episode_done = False
             while True:
                 if self.render:
                     self.env.render()
@@ -391,12 +392,13 @@ class BaseAlgorithm(ABC):
                 episode_score += reward
                 reward = torch.tensor([reward], device=self.device)
 
+                bootstrap_done = terminated
+                episode_done = terminated or truncated
+
                 if terminated:
                     next_state = None
                 else:
                     next_state = self.state_to_torch(observation)
-
-                done = terminated or truncated
 
                 # Store the transition in memory
                 transition = Transition(
@@ -404,14 +406,14 @@ class BaseAlgorithm(ABC):
                     action=action,
                     next_state=next_state,
                     reward=reward,
-                    done=done,
+                    done=bootstrap_done,
                 )
 
                 self.agent.experience_replay.push(transition)
 
                 state = next_state
 
-                if done:
+                if episode_done:
                     self.writer.train_scores.append(episode_score)
                     self.train_scores.append(episode_score)
                     self.mlflow_logger.log_metric(
