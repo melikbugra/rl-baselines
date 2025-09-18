@@ -160,7 +160,9 @@ class SACAgent(BaseAgent):
                 0.0 if self.max_action == 1.0 else np.log(self.max_action)
             )
             scale_correction = (
-                torch.as_tensor(scale_correction, device=next_z.device).view(1, 1)
+                torch.as_tensor(
+                    scale_correction, device=next_z.device, dtype=torch.float32
+                ).view(1, 1)
                 * next_z.shape[-1]
             )
             # Correct change-of-variables: log pi(a) = log pi(z) - log|det d(tanh(z))/dz| - log|scale|^d
@@ -175,6 +177,7 @@ class SACAgent(BaseAgent):
             y = reward_batch + mask_batch * self.gamma * (
                 target_min_q - torch.exp(self.log_alpha) * log_prob_policy
             )
+            y = y.float()
 
         # Critic loss
         _, current_q1, current_q2, _, _ = self.net(
@@ -204,7 +207,10 @@ class SACAgent(BaseAgent):
         log_det = self._tanh_log_det_jac(z)
         scale_correction = 0.0 if self.max_action == 1.0 else np.log(self.max_action)
         scale_correction = (
-            torch.as_tensor(scale_correction, device=z.device).view(1, 1) * z.shape[-1]
+            torch.as_tensor(
+                scale_correction, device=z.device, dtype=torch.float32
+            ).view(1, 1)
+            * z.shape[-1]
         )
         log_prob_policy = log_prob_gauss - log_det - scale_correction
 
