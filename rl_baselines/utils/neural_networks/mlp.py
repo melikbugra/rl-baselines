@@ -50,7 +50,7 @@ class MLP(BaseNeuralNetwork):
             self.mean_head = nn.Linear(self.layer_neuron_nums[-1], self.action_dim)
             self.std_head = nn.Linear(self.layer_neuron_nums[-1], self.action_dim)
 
-        self.apply(self._initialize_weights)
+        # self.apply(self._initialize_weights)
         self.to(device)
 
     def forward(self, state: Tensor):
@@ -83,7 +83,7 @@ class MLP(BaseNeuralNetwork):
 
             return outs
 
-    def _initialize_weights(self, m):
-        if isinstance(m, nn.Linear):
-            nn.init.xavier_uniform_(m.weight, gain=1.0)
-            nn.init.constant_(m.bias, 0.0)
+    # def _initialize_weights(self, m):
+    #     if isinstance(m, nn.Linear):
+    #         nn.init.xavier_uniform_(m.weight, gain=1.0)
+    #         nn.init.constant_(m.bias, 0.0)

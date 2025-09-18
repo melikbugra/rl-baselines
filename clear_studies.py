@@ -1,7 +1,7 @@
 import optuna
 
 # Specify your storage URL
-storage_url = "postgresql://optuna:optuna@optuna-db.melikbugraozcelik.com/optuna"  # Example for SQLite
+storage_url = "postgresql://optuna:optuna@optuna-db.melikbugraozcelik.com:15432/optuna"  # Example for SQLite
 # storage_url = "postgresql://user:password@localhost/dbname"  # Example for PostgreSQL, adjust as necessary
 
 # Retrieve all study summaries

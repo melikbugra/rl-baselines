@@ -53,7 +53,7 @@ class SACWriter(BaseWriter):
         }
 
         for name, value in metrics.items():
-            self.mlflow_logger.log_metric(name, value, step=self.time_step)
+            self.mlflow_logger.log_metric(name, value, step=int(self.time_step))
 
     def add_row_to_table(self):
         self.table.add_row(

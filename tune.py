@@ -1,5 +1,7 @@
 from rl_baselines.utils.tuner import Tuner
 
+from rl_baselines.value_based.dqn import VanillaDQN
+
 
 def main():
     env_name = "CartPole-v1"

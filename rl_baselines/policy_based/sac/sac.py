@@ -1,5 +1,7 @@
 from pathlib import Path
 import torch
+from gymnasium import Env
+from ast import literal_eval
 
 from rl_baselines.utils.base_classes.base_algorithm import BaseAlgorithm
 from rl_baselines.policy_based.sac.sac_agent import SACAgent
@@ -21,7 +23,7 @@ class SAC(BaseAlgorithm):
         experience_replay_type: str = "er",
         learning_rate: float = 3e-4,
         network_type: str = "mlp",
-        network_arch: list = [256, 256],
+        network_arch: list | str = [256, 256],
         render: bool = False,
         device: str = "cpu",
         env_seed: int = 42,
@@ -32,6 +34,8 @@ class SAC(BaseAlgorithm):
         gradient_clipping_max_norm: float = None,
         log_model: bool = False,
         render_eval: bool = False,
+        eval_env: Env = None,
+        evaluation: bool = True,
         # SAC specific parameters
         tau: float = 0.005,
         gamma: float = 0.99,
@@ -39,7 +43,10 @@ class SAC(BaseAlgorithm):
         batch_size: int = 256,
         target_entropy: float = -1.0,
         learning_starts: int = 1000,
+        gradient_steps: int = 1,
     ) -> None:
+        if type(network_arch) is str:
+            network_arch = literal_eval(network_arch)
         super().__init__(
             env=env,
             eval_env_kwargs=eval_env_kwargs,
@@ -57,6 +64,8 @@ class SAC(BaseAlgorithm):
             gradient_clipping_max_norm=gradient_clipping_max_norm,
             log_model=log_model,
             render_eval=render_eval,
+            eval_env=eval_env,
+            evaluation=evaluation,
         )
 
         if mlflow_tracking_uri and self.algo_name:
@@ -73,6 +82,7 @@ class SAC(BaseAlgorithm):
                     "batch_size": batch_size,
                     "device": device,
                     "normalize_observation": normalize_observation,
+                    "gradient_steps": gradient_steps,
                 },
                 env=env,
                 algo_name=self.algo_name,
@@ -105,6 +115,7 @@ class SAC(BaseAlgorithm):
             gamma=gamma,
             target_entropy=target_entropy,
             learning_starts=learning_starts,
+            gradient_steps=gradient_steps,
         )
 
     def save(self, folder: str = None, checkpoint="", save_path=None):

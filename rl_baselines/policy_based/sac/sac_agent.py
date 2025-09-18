@@ -31,6 +31,7 @@ class SACAgent(BaseAgent):
         gamma: float,
         target_entropy: float,
         learning_starts: int,
+        gradient_steps: int,
     ):
         super().__init__(
             env=env,
@@ -49,6 +50,7 @@ class SACAgent(BaseAgent):
         self.batch_size = batch_size
         self.target_entropy = target_entropy
         self.learning_starts = learning_starts
+        self.gradient_steps = gradient_steps
 
         self.log_alpha = torch.tensor(
             0.0, dtype=torch.float32, requires_grad=True, device=device
@@ -116,13 +118,16 @@ class SACAgent(BaseAgent):
         if len(self.experience_replay) < self.batch_size:
             return
 
-        transitions = self.get_transitions()
+        grad_updates = max(1, int(self.gradient_steps))
 
-        actor_loss, critic1_loss, critic2_loss, alpha_loss = self.compute_losses(
-            *transitions
-        )
+        for _ in range(grad_updates):
+            transitions = self.get_transitions()
 
-        self.update_parameters(actor_loss, critic1_loss, critic2_loss, alpha_loss)
+            actor_loss, critic1_loss, critic2_loss, alpha_loss = self.compute_losses(
+                *transitions
+            )
+
+            self.update_parameters(actor_loss, critic1_loss, critic2_loss, alpha_loss)
 
     def compute_losses(
         self, state_batch, action_batch, next_state_batch, reward_batch, mask_batch

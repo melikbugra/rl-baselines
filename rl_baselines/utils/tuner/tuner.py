@@ -12,6 +12,7 @@ import numpy as np
 from prettytable import PrettyTable
 
 from rl_baselines.utils.base_classes.base_algorithm import BaseAlgorithm
+import importlib
 
 
 class Tuner:
@@ -24,6 +25,8 @@ class Tuner:
         n_trials: int = 100,
         n_jobs: int = 1,
         storage: str = None,
+        env_kwargs: dict[str, Any] = {},
+        env_package: str = "stir_env",
     ) -> None:
         self.param_dicts = param_dicts
         self.env_name: str = env_name
@@ -32,6 +35,16 @@ class Tuner:
         self.n_trials: int = n_trials
         self.n_jobs: int = n_jobs
         self.storage: str = storage
+        self.env_kwargs: dict[str, Any] = env_kwargs
+        self.env_package: str = env_package
+
+        # import env package
+        try:
+            importlib.import_module(self.env_package)
+        except ImportError as e:
+            raise ImportError(
+                f"Could not import environment package '{self.env_package}'"
+            ) from e
 
         self.logger = optuna.logging.get_logger("USER-LOGGER")
 
@@ -81,7 +94,7 @@ class Tuner:
                 )
                 return completed_trial.value
 
-        env = gym.make(self.env_name)
+        env = gym.make(self.env_name, **self.env_kwargs)
         model: BaseAlgorithm = self.model_class(
             env,
             **suggested_params,

@@ -18,7 +18,8 @@ from rl_baselines.utils.base_classes.base_experience_replay import Transition
 from rl_baselines.utils.base_classes.base_writer import BaseWriter
 from rl_baselines.utils.base_classes.base_agent import BaseAgent
 from rl_baselines.utils.mlflow_logger.mlflow_logger import MLFlowLogger
-from rl_baselines.common.env_wrappers import make_atari_env, make_box2d_viz_env
+
+# from rl_baselines.common.env_wrappers import make_atari_env, make_box2d_viz_env
 
 
 class BaseAlgorithm(ABC):
@@ -44,11 +45,15 @@ class BaseAlgorithm(ABC):
         gradient_clipping_max_norm: float = None,
         gradient_clipping_value: float = None,
         render_eval: bool = False,
+        eval_env: Env = None,
+        evaluation: bool = True,
         episodic: bool = False,
         episodes_to_train: int = 16,
         log_model: bool = False,
     ) -> None:
         self.env: Env = env
+        self.eval_env: Env = eval_env
+        self.evaluation: bool = evaluation
         self.eval_env_kwargs: dict = eval_env_kwargs
         self.time_steps: int = time_steps
         self.learning_rate: float = learning_rate
@@ -128,19 +133,28 @@ class BaseAlgorithm(ABC):
             if (
                 time_step % self.writing_period == 0 and time_step != 0
             ) or time_step == self.time_steps - 1:
-                last_avg_eval_score = self.evaluate(
-                    time_step,
-                    episodes=1,
-                    render=self.render_eval,  # TODO: make episodes a parameter
-                )
+                if self.evaluation:
+                    last_avg_eval_score = self.evaluate(
+                        time_step,
+                        episodes=1,
+                        render=self.render_eval,  # TODO: make episodes a parameter
+                        eval_env=self.eval_env,
+                    )
 
-                # For optuna pruning
-                if trial:
-                    trial.report(-last_avg_eval_score, time_step)
+                    # For optuna pruning
+                    if trial:
+                        trial.report(-last_avg_eval_score, time_step)
+
+                else:
+                    self.writer.calculate_averages()
+                    last_avg_eval_score = self.writer.avg_train_score
+                    if trial:
+                        trial.report(-last_avg_eval_score, time_step)
 
                 if last_avg_eval_score >= best_avg_eval_score:
                     self.save(folder=self.models_folder, checkpoint="best_avg")
                     best_avg_eval_score = last_avg_eval_score
+
                 self.writer.time_elapsed = time.perf_counter() - self.start_time
                 if not trial:
                     print(self.writer)
@@ -158,14 +172,21 @@ class BaseAlgorithm(ABC):
             if (
                 episode % self.writing_period == 0 and episode != 0
             ) or episode == self.episodes_to_train - 1:
-                last_avg_eval_score = self.evaluate(
-                    episode,
-                    episodes=5,
-                    render=self.render_eval,  # TODO: make episodes a parameter
-                )
-                # For optuna pruning
-                if trial:
-                    trial.report(-last_avg_eval_score, episode)
+                if self.evaluation:
+                    last_avg_eval_score = self.evaluate(
+                        episode,
+                        episodes=5,
+                        render=self.render_eval,  # TODO: make episodes a parameter
+                    )
+                    # For optuna pruning
+                    if trial:
+                        trial.report(-last_avg_eval_score, episode)
+
+                else:
+                    last_avg_eval_score = self.writer.avg_train_score
+
+                    if trial:
+                        trial.report(-last_avg_eval_score, episode)
 
                 if last_avg_eval_score >= best_avg_eval_score:
                     self.save(folder=self.models_folder, checkpoint="best_avg")
@@ -183,53 +204,57 @@ class BaseAlgorithm(ABC):
         render: bool = True,
         episodes: int = 10,
         print_episode_score: bool = False,
+        eval_env: Env = None,
     ):
         self.agent.net.eval()  # Set the model to evaluation mode
         self.agent.net.training = False
-        if self.env.spec.id in self.atari_envs:
-            if render:
-                eval_env: Env = make_atari_env(self.env.spec.id, render_mode="human")
+        if eval_env is None:
+            if self.env.spec.id in self.atari_envs:
+                if render:
+                    eval_env: Env = make_atari_env(
+                        self.env.spec.id, render_mode="human"
+                    )
+                else:
+                    eval_env: Env = make_atari_env(self.env.spec.id)
+                if self.normalize_observation:
+                    eval_env = NormalizeObservation(eval_env)
+            elif self.env.spec.id in self.box_2d_viz_envs:
+                if render:
+                    eval_env: Env = make_box2d_viz_env(
+                        self.env.spec.id,
+                        render_mode="human",
+                        **self.eval_env_kwargs,
+                    )
+                else:
+                    eval_env: Env = make_box2d_viz_env(
+                        self.env.spec.id,
+                        **self.eval_env_kwargs,
+                    )
+                if self.normalize_observation:
+                    eval_env = NormalizeObservation(eval_env)
+            elif self.env.spec.id in self.melikbugra_envs:
+                if render:
+                    eval_env: Env = make_atari_env(
+                        self.env.spec.id, render_mode="human", fire_reset=False
+                    )
+                else:
+                    eval_env: Env = make_atari_env(self.env.spec.id, fire_reset=False)
+                if self.normalize_observation:
+                    eval_env = NormalizeObservation(eval_env)
             else:
-                eval_env: Env = make_atari_env(self.env.spec.id)
-            if self.normalize_observation:
-                eval_env = NormalizeObservation(eval_env)
-        elif self.env.spec.id in self.box_2d_viz_envs:
-            if render:
-                eval_env: Env = make_box2d_viz_env(
-                    self.env.spec.id,
-                    render_mode="human",
-                    **self.eval_env_kwargs,
-                )
-            else:
-                eval_env: Env = make_box2d_viz_env(
-                    self.env.spec.id,
-                    **self.eval_env_kwargs,
-                )
-            if self.normalize_observation:
-                eval_env = NormalizeObservation(eval_env)
-        elif self.env.spec.id in self.melikbugra_envs:
-            if render:
-                eval_env: Env = make_atari_env(
-                    self.env.spec.id, render_mode="human", fire_reset=False
-                )
-            else:
-                eval_env: Env = make_atari_env(self.env.spec.id, fire_reset=False)
-            if self.normalize_observation:
-                eval_env = NormalizeObservation(eval_env)
-        else:
-            if render:
-                eval_env: Env = gym.make(
-                    self.env.spec.id,
-                    render_mode="human",
-                    **self.eval_env_kwargs,
-                )
-            else:
-                eval_env: Env = gym.make(
-                    self.env.spec.id,
-                    **self.eval_env_kwargs,
-                )
-            if self.normalize_observation:
-                eval_env = NormalizeObservation(eval_env)
+                if render:
+                    eval_env: Env = gym.make(
+                        self.env.spec.id,
+                        render_mode="human",
+                        **self.eval_env_kwargs,
+                    )
+                else:
+                    eval_env: Env = gym.make(
+                        self.env.spec.id,
+                        **self.eval_env_kwargs,
+                    )
+                if self.normalize_observation:
+                    eval_env = NormalizeObservation(eval_env)
 
         episode_scores = []
         for _ in range(episodes):

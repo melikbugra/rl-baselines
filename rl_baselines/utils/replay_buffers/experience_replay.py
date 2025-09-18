@@ -76,7 +76,9 @@ class ExperienceReplay(BaseExperienceReplay):
         self.next_state_buffer[self.ptr] = n_step_state
         self.action_buffer[self.ptr] = self.n_step_buffer[0].action
         self.reward_buffer[self.ptr] = n_step_reward
-        self.done_buffer[self.ptr] = n_step_done
+        self.done_buffer[self.ptr] = torch.tensor(
+            n_step_done, dtype=torch.bool, device=self.device
+        )
 
         self.ptr = (self.ptr + 1) % self.max_size
         self.size = min(self.size + 1, self.max_size)
