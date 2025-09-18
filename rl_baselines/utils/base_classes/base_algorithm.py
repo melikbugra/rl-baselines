@@ -50,6 +50,7 @@ class BaseAlgorithm(ABC):
         episodic: bool = False,
         episodes_to_train: int = 16,
         log_model: bool = False,
+        eval_episodes: int = 10,
     ) -> None:
         self.env: Env = env
         self.eval_env: Env = eval_env
@@ -77,6 +78,7 @@ class BaseAlgorithm(ABC):
         self.episodic: bool = episodic
         self.episodes_to_train: int = episodes_to_train
         self.log_model: bool = log_model
+        self.eval_episodes: int = eval_episodes
 
         self.algo_name: str
 
@@ -136,7 +138,7 @@ class BaseAlgorithm(ABC):
                 if self.evaluation:
                     last_avg_eval_score = self.evaluate(
                         time_step,
-                        episodes=1,
+                        episodes=self.eval_episodes,
                         render=self.render_eval,  # TODO: make episodes a parameter
                         eval_env=self.eval_env,
                     )
@@ -175,7 +177,7 @@ class BaseAlgorithm(ABC):
                 if self.evaluation:
                     last_avg_eval_score = self.evaluate(
                         episode,
-                        episodes=5,
+                        episodes=self.eval_episodes,
                         render=self.render_eval,  # TODO: make episodes a parameter
                     )
                     # For optuna pruning

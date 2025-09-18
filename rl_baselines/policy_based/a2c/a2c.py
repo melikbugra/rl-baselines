@@ -39,6 +39,7 @@ class A2C(BaseAlgorithm):
         gradient_clipping_max_norm: float = 1.0,
         log_model: bool = False,
         render_eval: bool = False,
+        eval_episodes: int = 10,
         # optional a2c attributes
         n_step: int = 5,
     ) -> None:
@@ -61,6 +62,7 @@ class A2C(BaseAlgorithm):
             time_steps=time_steps,
             log_model=log_model,
             render_eval=render_eval,
+            eval_episodes=eval_episodes,
         )
 
         if mlflow_tracking_uri and self.algo_name:

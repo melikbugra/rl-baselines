@@ -41,6 +41,9 @@ class CrossEntropy(BaseAlgorithm):
         gradient_clipping_max_norm: float = 1.0,
         log_model: bool = False,
         render_eval: bool = False,
+        eval_env: Env = None,
+        eval_episodes: int = 10,
+        evaluation: bool = True,
     ) -> None:
         self.algo_name = "Cross-Entropy"
         super().__init__(
@@ -60,6 +63,9 @@ class CrossEntropy(BaseAlgorithm):
             gradient_clipping_max_norm=gradient_clipping_max_norm,
             log_model=log_model,
             render_eval=render_eval,
+            eval_episodes=eval_episodes,
+            evaluation=evaluation,
+            eval_env=eval_env,
         )
 
         if self.mlflow_logger.log:

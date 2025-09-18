@@ -41,6 +41,7 @@ class PPO(BaseAlgorithm):
         gamma: float = 0.99,
         memory_size: int = 2048,
         batch_size: int = 64,
+        eval_episodes: int = 10,
     ) -> None:
         super().__init__(
             env=env,
@@ -59,6 +60,7 @@ class PPO(BaseAlgorithm):
             gradient_clipping_max_norm=gradient_clipping_max_norm,
             log_model=log_model,
             render_eval=render_eval,
+            eval_episodes=eval_episodes,
         )
 
         if mlflow_tracking_uri and self.algo_name:

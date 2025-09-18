@@ -36,6 +36,7 @@ class SAC(BaseAlgorithm):
         render_eval: bool = False,
         eval_env: Env = None,
         evaluation: bool = True,
+        eval_episodes: int = 10,
         # SAC specific parameters
         tau: float = 0.005,
         gamma: float = 0.99,
@@ -66,6 +67,7 @@ class SAC(BaseAlgorithm):
             render_eval=render_eval,
             eval_env=eval_env,
             evaluation=evaluation,
+            eval_episodes=eval_episodes,
         )
 
         if mlflow_tracking_uri and self.algo_name:
