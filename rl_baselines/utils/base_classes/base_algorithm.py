@@ -260,7 +260,7 @@ class BaseAlgorithm(ABC):
 
         episode_scores = []
         for _ in range(episodes):
-            state, _ = eval_env.reset(seed=np.random.randint(0, 100))
+            state, _ = eval_env.reset(seed=self.env_seed)
             state = self.state_to_torch(state)
 
             episode_score = 0
