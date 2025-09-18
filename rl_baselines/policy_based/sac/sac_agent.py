@@ -154,14 +154,8 @@ class SACAgent(BaseAgent):
             next_z = next_mean + next_std * noise
             next_action = torch.tanh(next_z) * self.max_action
 
-            log_prob_gauss = -0.5 * (
-                ((next_z - next_mean) / next_std) ** 2
-                + 2 * torch.log(next_std)
-                + np.log(2 * np.pi)
-            )
             log_prob_gauss = self._log_prob_gauss(next_z, next_mean, log_std)
             log_det = self._tanh_log_det_jac(next_z)
-
             scale_correction = (
                 0.0 if self.max_action == 1.0 else np.log(self.max_action)
             )
@@ -169,8 +163,8 @@ class SACAgent(BaseAgent):
                 torch.as_tensor(scale_correction, device=next_z.device).view(1, 1)
                 * next_z.shape[-1]
             )
-
-            log_prob_policy = log_prob_gauss + log_det - scale_correction
+            # Correct change-of-variables: log pi(a) = log pi(z) - log|det d(tanh(z))/dz| - log|scale|^d
+            log_prob_policy = log_prob_gauss - log_det - scale_correction
 
             _, _, _, target_q1, target_q2 = self.net(
                 state=next_state_batch,
@@ -212,8 +206,7 @@ class SACAgent(BaseAgent):
         scale_correction = (
             torch.as_tensor(scale_correction, device=z.device).view(1, 1) * z.shape[-1]
         )
-
-        log_prob_policy = log_prob_gauss + log_det - scale_correction
+        log_prob_policy = log_prob_gauss - log_det - scale_correction
 
         _, q1_pi, q2_pi, _, _ = self.net(
             state=state_batch,
