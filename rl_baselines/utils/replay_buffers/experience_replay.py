@@ -32,8 +32,10 @@ class ExperienceReplay(BaseExperienceReplay):
         self.state_buffer: Tensor = torch.zeros(
             [size, 1, *state_dim], dtype=torch.float32, device=device
         )
-        # Use None as a placeholder for next_state (next state is None if the episode is terminated)
-        self.next_state_buffer: Tensor = [None] * size
+        # Pre-allocate next_state buffer as a tensor for fast indexed sampling
+        self.next_state_buffer: Tensor = torch.zeros(
+            [size, 1, *state_dim], dtype=torch.float32, device=device
+        )
         if action_type == "discrete":
             self.action_buffer: Tensor = torch.zeros(
                 [size, 1, action_dim], dtype=torch.int64, device=device
@@ -68,7 +70,7 @@ class ExperienceReplay(BaseExperienceReplay):
         # Calculate the n-step reward and the final state
         n_step_reward, n_step_state, n_step_done = self._get_n_step_info()
 
-        # Instead of storing None, store a zero tensor for terminal states
+        # If terminal, store a zero tensor for next_state (done flag carries termination)
         if n_step_state is None:
             n_step_state = torch.zeros_like(self.state_buffer[self.ptr])
 
@@ -84,10 +86,11 @@ class ExperienceReplay(BaseExperienceReplay):
         self.size = min(self.size + 1, self.max_size)
 
     def sample(self) -> Transition:
-        indices = np.random.choice(self.size, size=self.batch_size, replace=False)
+        # Use torch-native indexing without replacement for better performance
+        indices = torch.randperm(self.size, device=self.device)[: self.batch_size]
         state = self.state_buffer[indices]
         action = self.action_buffer[indices]
-        next_state = torch.stack([self.next_state_buffer[idx] for idx in indices])
+        next_state = self.next_state_buffer[indices]
         reward = self.reward_buffer[indices]
         done = self.done_buffer[indices]
         batch = Transition(
@@ -98,7 +101,7 @@ class ExperienceReplay(BaseExperienceReplay):
 
     def clear(self):
         self.state_buffer = torch.zeros_like(self.state_buffer)
-        self.next_state_buffer = [None] * self.max_size
+        self.next_state_buffer = torch.zeros_like(self.next_state_buffer)
         self.action_buffer = torch.zeros_like(self.action_buffer)
         self.reward_buffer = torch.zeros_like(self.reward_buffer)
         self.done_buffer = torch.zeros_like(self.done_buffer)

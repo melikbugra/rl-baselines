@@ -116,7 +116,7 @@ class BaseAlgorithm(ABC):
             last_avg_eval_score = self.train_iterations(trial)
 
         self.time_elapsed = time.perf_counter() - self.start_time
-        self.save(folder=self.models_folder, checkpoint="last")
+
         if self.mlflow_logger.log:
             self.mlflow_logger.end_run()
 
@@ -142,6 +142,7 @@ class BaseAlgorithm(ABC):
                         render=self.render_eval,  # TODO: make episodes a parameter
                         eval_env=self.eval_env,
                     )
+                    self.save(folder=self.models_folder, checkpoint="last")
 
                     # For optuna pruning
                     if trial:

@@ -84,6 +84,16 @@ class SACAgent(BaseAgent):
         self.act_low = float(env.action_space.low[0])
         self.act_high = float(env.action_space.high[0])
         self.max_action = max(abs(self.act_low), abs(self.act_high))
+        # Cache action dimension and scale-correction constant to avoid recomputing
+        self.action_dim = int(np.prod(env.action_space.shape))
+        scale_corr_per_dim = (
+            0.0 if self.max_action == 1.0 else float(np.log(self.max_action))
+        )
+        self._scale_correction = torch.tensor(
+            scale_corr_per_dim * self.action_dim,
+            device=self.device,
+            dtype=torch.float32,
+        ).view(1, 1)
 
     def select_action(self, state):
         if self.steps_done < self.learning_starts:
@@ -91,7 +101,9 @@ class SACAgent(BaseAgent):
             return self.select_random_action()
 
         state = state.float()
-        outs, _, _, _, _ = self.net(state=state, actor_pass=True)
+        # No gradients needed for env interaction
+        with torch.no_grad():
+            outs, _, _, _, _ = self.net(state=state, actor_pass=True)
 
         if self.net.action_type == "continuous":
             mean, std = outs[0]
@@ -156,15 +168,7 @@ class SACAgent(BaseAgent):
 
             log_prob_gauss = self._log_prob_gauss(next_z, next_mean, log_std)
             log_det = self._tanh_log_det_jac(next_z)
-            scale_correction = (
-                0.0 if self.max_action == 1.0 else np.log(self.max_action)
-            )
-            scale_correction = (
-                torch.as_tensor(
-                    scale_correction, device=next_z.device, dtype=torch.float32
-                ).view(1, 1)
-                * next_z.shape[-1]
-            )
+            scale_correction = self._scale_correction
             # Correct change-of-variables: log pi(a) = log pi(z) - log|det d(tanh(z))/dz| - log|scale|^d
             log_prob_policy = log_prob_gauss - log_det - scale_correction
 
@@ -174,8 +178,9 @@ class SACAgent(BaseAgent):
                 target_pass=True,
             )
             target_min_q = torch.min(target_q1, target_q2)
+            alpha = torch.exp(self.log_alpha)
             y = reward_batch + mask_batch * self.gamma * (
-                target_min_q - torch.exp(self.log_alpha) * log_prob_policy
+                target_min_q - alpha * log_prob_policy
             )
             y = y.float()
 
@@ -205,13 +210,7 @@ class SACAgent(BaseAgent):
 
         log_prob_gauss = self._log_prob_gauss(z, mean, log_std)
         log_det = self._tanh_log_det_jac(z)
-        scale_correction = 0.0 if self.max_action == 1.0 else np.log(self.max_action)
-        scale_correction = (
-            torch.as_tensor(
-                scale_correction, device=z.device, dtype=torch.float32
-            ).view(1, 1)
-            * z.shape[-1]
-        )
+        scale_correction = self._scale_correction
         log_prob_policy = log_prob_gauss - log_det - scale_correction
 
         _, q1_pi, q2_pi, _, _ = self.net(
@@ -220,7 +219,8 @@ class SACAgent(BaseAgent):
             critic_pass=True,
         )
         min_q_pi = torch.min(q1_pi, q2_pi)
-        actor_loss = (torch.exp(self.log_alpha) * log_prob_policy - min_q_pi).mean()
+        alpha = torch.exp(self.log_alpha)
+        actor_loss = (alpha * log_prob_policy - min_q_pi).mean()
         self.writer.actor_losses.append(actor_loss.item())
 
         # Alpha loss
@@ -289,7 +289,7 @@ class SACAgent(BaseAgent):
         action_batch = transitions.action.squeeze(1)
         reward_batch = transitions.reward.squeeze(1)
         done_batch = transitions.done.squeeze(1).int()
-        mask_batch = 1 - done_batch
+        mask_batch = (1 - done_batch).float()
 
         return (
             state_batch,
