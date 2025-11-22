@@ -14,13 +14,17 @@ class MLFlowLogger:
             mlflow.set_tracking_uri(mlflow_tracking_uri)
 
     def define_experiment_and_run(
-        self, params_to_log: dict[str, Any], env: Env, algo_name: str
+        self,
+        params_to_log: dict[str, Any],
+        env: Env,
+        algo_name: str,
+        run_name_prefix: str = "",
     ):
         experiment_name = (
             f"{env.unwrapped.spec.id}_{algo_name.lower().replace(' ', '_')}"
         )
         mlflow.set_experiment(experiment_name)
-        run_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        run_name = f"{run_name_prefix}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
         self.active_run = mlflow.start_run(run_name=run_name)
         for param_name, param in params_to_log.items():
             mlflow.log_param(param_name, param)

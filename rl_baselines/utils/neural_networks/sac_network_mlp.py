@@ -11,21 +11,23 @@ class SACNetworkMLP(BaseSACNeuralNetwork):
     def __init__(
         self,
         actor_mlp: BaseNeuralNetwork,
-        critic1_mlp: BaseNeuralNetwork,
-        critic2_mlp: BaseNeuralNetwork,
-        target_critic1_mlp: BaseNeuralNetwork,
-        target_critic2_mlp: BaseNeuralNetwork,
+        critic_mlps: list[BaseNeuralNetwork],  # <— YENİ: [head_1, ..., head_H]
+        target_critic_mlps: list[BaseNeuralNetwork],  # <— YENİ: hedef başlar
     ):
         super().__init__()
         self.network_type: str = "mlp"
         self.actor = actor_mlp
-        self.critic1 = critic1_mlp
-        self.critic2 = critic2_mlp
-        self.target_critic1 = target_critic1_mlp
-        self.target_critic2 = target_critic2_mlp
+
+        # Critics as lists (H heads)
+        assert len(critic_mlps) >= 2, "Use at least 2 Q-heads (>= REDQ/Double)"
+        assert len(critic_mlps) == len(target_critic_mlps)
+        self.critics = nn.ModuleList(critic_mlps)
+        self.target_critics = nn.ModuleList(target_critic_mlps)
+
+        self.num_q_heads = len(self.critics)
 
         self.action_type = actor_mlp.action_type
-        self.action_dim = actor_mlp.action_dim
+        self.action_dim = actor_mlp.action_dim  # (act_dim,)
 
     def forward(
         self,
@@ -34,24 +36,39 @@ class SACNetworkMLP(BaseSACNeuralNetwork):
         actor_pass: bool = False,
         critic_pass: bool = False,
         target_pass: bool = False,
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
-        if actor_pass:
-            outs = self.actor(state)
-        else:
-            outs = None
+    ):
+        """
+        Dönüş:
+          outs: actor çıkışı (veya None)
+          q_stack: [B, H] (veya None)  — critics
+          q_mean:  [B, 1] (veya None)
+          q_std:   [B, 1] (veya None)
+          tgt_q_stack, tgt_q_mean, tgt_q_std: target critics (veya None)
+        """
+        outs = self.actor(state) if actor_pass else None
 
-        if critic_pass:
-            q1 = self.critic1(torch.cat([state, action], dim=-1))[0]
-            q2 = self.critic2(torch.cat([state, action], dim=-1))[0]
-        else:
-            q1 = None
-            q2 = None
+        def _stack_qs(modules: nn.ModuleList, s: Tensor, a: Tensor):
+            # Her head için tek değer [B,1]; sonra [B,H] stokla
+            qs = []
+            sa = torch.cat([s, a], dim=-1)
+            for m in modules:
+                q = m(sa)[0]  # senin MLP Base çıktın ilk indexte tensor veriyor.
+                qs.append(q)
+            q_stack = torch.cat(qs, dim=1)  # [B, H]
+            q_mean = q_stack.mean(dim=1, keepdim=True)
+            q_std = q_stack.std(dim=1, keepdim=True, unbiased=False)
+            return q_stack, q_mean, q_std
 
-        if target_pass:
-            target_q1 = self.target_critic1(torch.cat([state, action], dim=-1))[0]
-            target_q2 = self.target_critic2(torch.cat([state, action], dim=-1))[0]
+        if critic_pass and action is not None:
+            q_stack, q_mean, q_std = _stack_qs(self.critics, state, action)
         else:
-            target_q1 = None
-            target_q2 = None
+            q_stack = q_mean = q_std = None
 
-        return outs, q1, q2, target_q1, target_q2
+        if target_pass and action is not None:
+            tgt_q_stack, tgt_q_mean, tgt_q_std = _stack_qs(
+                self.target_critics, state, action
+            )
+        else:
+            tgt_q_stack = tgt_q_mean = tgt_q_std = None
+
+        return outs, q_stack, q_mean, q_std, tgt_q_stack, tgt_q_mean, tgt_q_std

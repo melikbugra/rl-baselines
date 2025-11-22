@@ -230,55 +230,56 @@ def make_actor_cnn_critic_cnn(env: Env, device: torch.device) -> tuple[CNN, CNN]
     return actor_cnn_critic_cnn
 
 
-def make_sac_networks_mlp(env: Env, network_arch, device) -> SACNetworkMLP:
-    """Creates actor and critic networks for SAC"""
+def make_sac_networks_mlp(
+    env: Env,
+    network_arch,
+    device,
+    num_q_heads: int = 2,  # <— YENİ: 2 = mevcut davranış
+) -> SACNetworkMLP:
+    """Creates actor and critic networks for SAC (MLP) with Q-ensemble support"""
     input_neurons = np.prod(env.observation_space.shape)
 
-    if isinstance(env.action_space, Box):
-        actor = MLP(
-            input_neurons=input_neurons,
-            network_arch=network_arch,
-            output_neurons=env.action_space.shape,
-            device=device,
-        )
-        critic1 = MLP(
-            input_neurons=input_neurons + env.action_space.shape[0],
-            network_arch=network_arch,
-            output_neurons=1,
-            device=device,
-        )
-        critic2 = MLP(
-            input_neurons=input_neurons + env.action_space.shape[0],
-            network_arch=network_arch,
-            output_neurons=1,
-            device=device,
-        )
-        target_critic1 = MLP(
-            input_neurons=input_neurons + env.action_space.shape[0],
-            network_arch=network_arch,
-            output_neurons=1,
-            device=device,
-        )
-        target_critic2 = MLP(
-            input_neurons=input_neurons + env.action_space.shape[0],
-            network_arch=network_arch,
-            output_neurons=1,
-            device=device,
-        )
+    assert isinstance(
+        env.action_space, Box
+    ), "SAC only supports continuous action (Box)"
+    act_dim = env.action_space.shape[0]
 
-        target_critic1.load_state_dict(critic1.state_dict())
-        target_critic2.load_state_dict(critic2.state_dict())
-        target_critic1.eval()
-        target_critic2.eval()
+    # Actor
+    actor = MLP(
+        input_neurons=input_neurons,
+        network_arch=network_arch,
+        output_neurons=env.action_space.shape,  # (act_dim,)
+        device=device,
+    )
 
-        sac_network_mlp = SACNetworkMLP(
-            actor_mlp=actor,
-            critic1_mlp=critic1,
-            critic2_mlp=critic2,
-            target_critic1_mlp=target_critic1,
-            target_critic2_mlp=target_critic2,
+    # Critics (heads) — list halinde
+    critic_mlps: list[MLP] = []
+    target_critic_mlps: list[MLP] = []
+
+    for _ in range(num_q_heads):
+        c = MLP(
+            input_neurons=input_neurons + act_dim,
+            network_arch=network_arch,
+            output_neurons=1,
+            device=device,
         )
+        ct = MLP(
+            input_neurons=input_neurons + act_dim,
+            network_arch=network_arch,
+            output_neurons=1,
+            device=device,
+        )
+        ct.load_state_dict(c.state_dict())
+        ct.eval()
 
+        critic_mlps.append(c)
+        target_critic_mlps.append(ct)
+
+    sac_network_mlp = SACNetworkMLP(
+        actor_mlp=actor,
+        critic_mlps=critic_mlps,  # <— liste veriyoruz
+        target_critic_mlps=target_critic_mlps,  # <— liste veriyoruz
+    )
     return sac_network_mlp
 
 
