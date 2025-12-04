@@ -3,13 +3,19 @@ import torch
 from torch import Tensor
 import torch.nn.functional as F
 from gymnasium import Env
+from typing import Optional, Callable
 
 from rl_baselines.utils.base_classes import (
     BaseAgent,
     BaseSACNeuralNetwork,
     Transition,
 )
-from rl_baselines.utils.replay_buffers import make_experience_replay
+from rl_baselines.utils.replay_buffers import (
+    make_experience_replay,
+    make_hindsight_experience_replay,
+    HindsightExperienceReplay,
+    GoalConditionedTransition,
+)
 from rl_baselines.policy_based.sac.sac_writer import SACWriter
 
 MIN_LOG_STD = -20.0
@@ -34,6 +40,10 @@ class SACAgent(BaseAgent):
         target_entropy: float,
         learning_starts: int,
         gradient_steps: int,
+        # HER specific parameters
+        n_sampled_goal: int = 4,
+        goal_selection_strategy: str = "future",
+        her_compute_reward: Optional[Callable] = None,
     ):
         super().__init__(
             env=env,
@@ -69,15 +79,33 @@ class SACAgent(BaseAgent):
             critic_params += list(c.parameters())
         self.critic_optimizer = torch.optim.Adam(critic_params, lr=learning_rate)
 
-        # Replay
-        self.experience_replay = make_experience_replay(
-            env=env,
-            experience_replay_size=experience_replay_size,
-            batch_size=batch_size,
-            device=self.device,
-            network_type=self.net.network_type,
-            action_type=self.net.action_type,
-        )
+        # Experience Replay Type
+        self.experience_replay_type = experience_replay_type
+        self.use_her = experience_replay_type == "her"
+
+        # Replay Buffer
+        if self.use_her:
+            self.experience_replay = make_hindsight_experience_replay(
+                env=env,
+                experience_replay_size=experience_replay_size,
+                batch_size=batch_size,
+                device=self.device,
+                n_sampled_goal=n_sampled_goal,
+                goal_selection_strategy=goal_selection_strategy,
+                gamma=gamma,
+                network_type=self.net.network_type,
+                action_type=self.net.action_type,
+                compute_reward=her_compute_reward,
+            )
+        else:
+            self.experience_replay = make_experience_replay(
+                env=env,
+                experience_replay_size=experience_replay_size,
+                batch_size=batch_size,
+                device=self.device,
+                network_type=self.net.network_type,
+                action_type=self.net.action_type,
+            )
 
         # Action scaling info
         self.act_low = float(env.action_space.low[0])
@@ -268,3 +296,80 @@ class SACAgent(BaseAgent):
             -0.5
             * (((z - mean) / torch.exp(log_std)) ** 2 + 2 * log_std + np.log(2 * np.pi))
         ).sum(dim=-1, keepdim=True)
+
+    # ========== HER Support ==========
+    def push_transition(self, transition: Transition):
+        """
+        Push a transition to the replay buffer.
+        For standard replay buffers, this just calls push().
+        For HER, use push_her_transition() instead.
+
+        Args:
+            transition: A Transition namedtuple
+        """
+        self.experience_replay.push(transition)
+
+    def push_her_transition(
+        self,
+        state: Tensor,
+        action: Tensor,
+        next_state: Tensor,
+        reward: Tensor,
+        done: bool,
+        achieved_goal: Tensor,
+        desired_goal: Tensor,
+        next_achieved_goal: Tensor,
+        info: dict = None,
+    ):
+        """
+        Push a goal-conditioned transition to the HER buffer.
+
+        This method should be used when experience_replay_type='her'.
+        It stores the transition with goal information for hindsight relabeling.
+
+        Args:
+            state: Current observation
+            action: Action taken
+            next_state: Next observation
+            reward: Reward received
+            done: Whether episode ended
+            achieved_goal: Goal achieved in current state
+            desired_goal: Goal we wanted to achieve
+            next_achieved_goal: Goal achieved in next state
+            info: Additional info dict (used for timeout detection)
+        """
+        if not self.use_her:
+            # Fallback to standard transition
+            transition = Transition(
+                state=state,
+                action=action,
+                next_state=next_state,
+                reward=reward,
+                done=done,
+            )
+            self.experience_replay.push(transition)
+            return
+
+        # Create goal-conditioned transition
+        her_transition = GoalConditionedTransition(
+            state=state,
+            action=action,
+            next_state=next_state,
+            reward=reward,
+            done=done,
+            achieved_goal=achieved_goal,
+            desired_goal=desired_goal,
+            next_achieved_goal=next_achieved_goal,
+            info=info if info is not None else {},
+        )
+        self.experience_replay.push(her_transition)
+
+    def end_her_episode(self):
+        """
+        Manually signal end of episode for HER buffer processing.
+
+        This triggers the hindsight relabeling for the collected episode.
+        Call this when an episode ends due to timeout rather than terminal state.
+        """
+        if self.use_her and hasattr(self.experience_replay, "end_episode"):
+            self.experience_replay.end_episode()
