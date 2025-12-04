@@ -7,7 +7,7 @@ import time
 
 import gymnasium as gym
 from gymnasium import Env
-from gymnasium.spaces import Discrete, MultiDiscrete
+from gymnasium.spaces import Discrete, MultiDiscrete, Dict as DictSpace
 from gymnasium.wrappers import NormalizeObservation
 import numpy as np
 import matplotlib.pyplot as plt
@@ -129,8 +129,15 @@ class BaseAlgorithm(ABC):
     def train_iterations(self, trial: BaseTrial = None) -> float:
         last_avg_eval_score = None
         best_avg_eval_score = -np.inf
+
+        # Check if agent uses HER (transitions are pushed in collect_data_iterations)
+        use_her = hasattr(self.agent, "use_her") and self.agent.use_her
+
         for time_step, transition in self.collect_data_iterations():
-            self.agent.experience_replay.push(transition)
+            # For HER, transitions are already pushed in collect_data_iterations
+            # For standard replay, push here
+            if not use_her:
+                self.agent.experience_replay.push(transition)
             self.agent.optimize_model(time_step)
             if (
                 time_step % self.writing_period == 0 and time_step != 0
@@ -309,13 +316,20 @@ class BaseAlgorithm(ABC):
         return average_score
 
     def collect_data_iterations(self) -> Iterator[Transition]:
-        """Collect data for training and yield for each time_step
+        """Collect data for training and yield for each time_step.
+
+        Supports both standard environments and GoalEnv (Dict observation space).
+        For HER-enabled agents, automatically handles goal-conditioned transitions.
 
         :yield: The transition for the time_step
         :rtype: Iterator[iter[Transition]]
         """
-        state, _ = self.env.reset(seed=self.env_seed)
-        state = self.state_to_torch(state)
+        obs_raw, _ = self.env.reset(seed=self.env_seed)
+        state = self.state_to_torch(obs_raw)
+
+        # Check if this is a GoalEnv and if agent uses HER
+        is_goal_env = isinstance(obs_raw, dict)
+        use_her = hasattr(self.agent, "use_her") and self.agent.use_her
 
         episode_score = 0
 
@@ -327,9 +341,11 @@ class BaseAlgorithm(ABC):
                 action_to_env = action.item()
             else:
                 action_to_env = action.cpu().numpy().flatten().tolist()
-            observation, reward, terminated, truncated, _ = self.env.step(action_to_env)
+            next_obs_raw, reward, terminated, truncated, info = self.env.step(
+                action_to_env
+            )
             episode_score += reward
-            reward = torch.tensor([reward], device=self.device)
+            reward_tensor = torch.tensor([reward], device=self.device)
 
             bootstrap_done = terminated
             episode_done = terminated or truncated
@@ -337,21 +353,82 @@ class BaseAlgorithm(ABC):
             if terminated:
                 next_state = None
             else:
-                next_state = self.state_to_torch(observation)
+                next_state = self.state_to_torch(next_obs_raw)
 
-            # Store the transition in memory
-            transition = Transition(
-                state=state,
-                action=action,
-                next_state=next_state,
-                reward=reward,
-                done=bootstrap_done,
-            )
+            # Handle HER transitions for GoalEnv
+            if use_her and is_goal_env:
+                # Extract goal information
+                obs_only = torch.as_tensor(
+                    np.array(obs_raw["observation"]).flatten(),
+                    dtype=torch.float32,
+                    device=self.device,
+                ).unsqueeze(0)
+                next_obs_only = (
+                    torch.as_tensor(
+                        np.array(next_obs_raw["observation"]).flatten(),
+                        dtype=torch.float32,
+                        device=self.device,
+                    ).unsqueeze(0)
+                    if not terminated
+                    else torch.zeros_like(obs_only)
+                )
+                achieved_goal = torch.as_tensor(
+                    np.array(obs_raw["achieved_goal"]).flatten(),
+                    dtype=torch.float32,
+                    device=self.device,
+                ).unsqueeze(0)
+                desired_goal = torch.as_tensor(
+                    np.array(obs_raw["desired_goal"]).flatten(),
+                    dtype=torch.float32,
+                    device=self.device,
+                ).unsqueeze(0)
+                next_achieved_goal = torch.as_tensor(
+                    np.array(next_obs_raw["achieved_goal"]).flatten(),
+                    dtype=torch.float32,
+                    device=self.device,
+                ).unsqueeze(0)
+
+                # Push HER transition
+                self.agent.push_her_transition(
+                    state=obs_only,
+                    action=action,
+                    next_state=next_obs_only,
+                    reward=reward_tensor,
+                    done=bootstrap_done,
+                    achieved_goal=achieved_goal,
+                    desired_goal=desired_goal,
+                    next_achieved_goal=next_achieved_goal,
+                    info=info,
+                )
+
+                # Create standard transition for yielding (state includes goal)
+                transition = Transition(
+                    state=state,
+                    action=action,
+                    next_state=next_state,
+                    reward=reward_tensor,
+                    done=bootstrap_done,
+                )
+            else:
+                # Standard transition
+                transition = Transition(
+                    state=state,
+                    action=action,
+                    next_state=next_state,
+                    reward=reward_tensor,
+                    done=bootstrap_done,
+                )
+
             yield time_step, transition
 
             state = next_state
+            obs_raw = next_obs_raw
 
             if episode_done:
+                # Signal end of episode for HER processing
+                if use_her and hasattr(self.agent, "end_her_episode"):
+                    self.agent.end_her_episode()
+
                 self.writer.train_scores.append(episode_score)
                 self.train_scores.append(episode_score)
                 self.mlflow_logger.log_metric(
@@ -363,8 +440,8 @@ class BaseAlgorithm(ABC):
                 if self.plot_train_sores:
                     self.plot_scores()
 
-                state, _ = self.env.reset(seed=self.env_seed)
-                state = self.state_to_torch(state)
+                obs_raw, _ = self.env.reset(seed=self.env_seed)
+                state = self.state_to_torch(obs_raw)
 
                 episode_score = 0
 
@@ -435,7 +512,15 @@ class BaseAlgorithm(ABC):
                     yield episode
                     break
 
-    def state_to_torch(self, state: np.ndarray):
+    def state_to_torch(self, state):
+        """Convert state to torch tensor. Handles both regular and GoalEnv observations."""
+        # Handle GoalEnv dict observations
+        if isinstance(state, dict):
+            # Concatenate observation with desired_goal for goal-conditioned learning
+            obs = np.array(state["observation"]).flatten()
+            goal = np.array(state["desired_goal"]).flatten()
+            state = np.concatenate([obs, goal])
+
         if self.network_type == "mlp" or self.network_type == "actor_mlp_critic_mlp":
             return torch.as_tensor(
                 state, dtype=torch.float32, device=self.device
