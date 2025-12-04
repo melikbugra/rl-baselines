@@ -1,5 +1,5 @@
 from gymnasium import Env
-from gymnasium.spaces import Discrete, MultiDiscrete, Box
+from gymnasium.spaces import Discrete, MultiDiscrete, Box, Dict as DictSpace
 import numpy as np
 import torch
 
@@ -236,12 +236,23 @@ def make_sac_networks_mlp(
     device,
     num_q_heads: int = 2,  # <— YENİ: 2 = mevcut davranış
 ) -> SACNetworkMLP:
-    """Creates actor and critic networks for SAC (MLP) with Q-ensemble support"""
-    input_neurons = np.prod(env.observation_space.shape)
+    """Creates actor and critic networks for SAC (MLP) with Q-ensemble support.
 
-    assert isinstance(
-        env.action_space, Box
-    ), "SAC only supports continuous action (Box)"
+    Supports both standard environments and GoalEnv (Dict observation space).
+    For GoalEnv, observation and desired_goal are concatenated as input.
+    """
+    # Handle GoalEnv (Dict observation space)
+    if isinstance(env.observation_space, DictSpace):
+        # GoalEnv interface: concatenate observation + desired_goal
+        obs_dim = int(np.prod(env.observation_space["observation"].shape))
+        goal_dim = int(np.prod(env.observation_space["desired_goal"].shape))
+        input_neurons = obs_dim + goal_dim
+    else:
+        input_neurons = int(np.prod(env.observation_space.shape))
+
+    assert isinstance(env.action_space, Box), (
+        "SAC only supports continuous action (Box)"
+    )
     act_dim = env.action_space.shape[0]
 
     # Actor
