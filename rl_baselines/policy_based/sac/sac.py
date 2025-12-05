@@ -150,213 +150,530 @@ class SAC(BaseAlgorithm):
         self.n_sampled_goal = n_sampled_goal
         self.goal_selection_strategy = goal_selection_strategy
 
-    def save(self, folder: str = None, checkpoint="", save_path=None):
+    def save(
+        self,
+        folder: str = None,
+        checkpoint: str = "",
+        save_path: str = None,
+        save_optimizer: bool = True,
+        save_replay_buffer: bool = False,
+    ):
+        """
+        Save model checkpoint.
+
+        Args:
+            folder: Directory to save the checkpoint
+            checkpoint: Checkpoint name suffix (e.g., 'best', 'last', '100k')
+            save_path: Full path to save file (overrides folder/checkpoint)
+            save_optimizer: Whether to save optimizer states (needed for resuming training)
+            save_replay_buffer: Whether to save replay buffer (large, but allows exact resume)
+
+        Returns:
+            Path to saved checkpoint
+        """
+        # Determine save path
         if save_path:
             save_path = Path(save_path).with_suffix(".ckpt")
         else:
-            env_name = self.env.spec.id
-            folder: Path = Path(folder)
+            env_name = (
+                self.env.spec.id
+                if hasattr(self.env, "spec") and self.env.spec
+                else "custom_env"
+            )
+            folder = Path(folder) if folder else self.models_folder
+            folder.mkdir(parents=True, exist_ok=True)
             save_path = (
                 folder / f"{env_name}_{self.algo_name}_{self.device}_{checkpoint}"
             ).with_suffix(".ckpt")
 
-        # --- ortak metadata ---
+        # === Core Model State ===
         model_state = {
+            # Version info for compatibility
+            "version": "2.0",
+            "algo_name": self.algo_name,
+            # Network weights (most important for transfer learning)
             "state_dict": self.agent.net.state_dict(),
+            # Network architecture (needed to reconstruct)
             "network_arch": self.network_arch,
             "network_type": self.network_type,
-            "checkpoint": checkpoint,
-            "device": self.device,
-            "normalize_observation": self.normalize_observation,
-            # SAC params
-            "log_alpha": self.agent.log_alpha.detach().to("cpu"),
+            "num_q_heads": len(self.agent.net.critics)
+            if hasattr(self.agent.net, "critics")
+            else 2,
+            # Environment info
+            "env_id": self.env.spec.id
+            if hasattr(self.env, "spec") and self.env.spec
+            else None,
+            "action_dim": self.agent.action_dim,
+            "observation_space_shape": self._get_obs_space_info(),
+            # Training state
             "steps_done": self.agent.steps_done,
-            "tau": self.agent.tau,
-            "gamma": self.agent.gamma,
-            "batch_size": self.agent.batch_size,
-            "target_entropy": self.agent.target_entropy,
-            "learning_rate": self.agent.actor_optimizer.param_groups[0]["lr"],
-            "learning_starts": self.agent.learning_starts,
-            "gradient_clipping_max_norm": self.agent.gradient_clipping_max_norm,
-            # Ensemble meta
-            "num_q_heads": (
-                len(self.agent.net.critics) if hasattr(self.agent.net, "critics") else 2
-            ),
-            # HER params
-            "experience_replay_type": self.experience_replay_type,
-            "n_sampled_goal": self.n_sampled_goal,
-            "goal_selection_strategy": self.goal_selection_strategy,
+            "checkpoint": checkpoint,
+            "device": str(self.device),
+            # SAC hyperparameters
+            "hyperparams": {
+                "tau": self.agent.tau,
+                "gamma": self.agent.gamma,
+                "batch_size": self.agent.batch_size,
+                "target_entropy": self.agent.target_entropy,
+                "learning_rate": self.agent.actor_optimizer.param_groups[0]["lr"],
+                "learning_starts": self.agent.learning_starts,
+                "gradient_clipping_max_norm": self.agent.gradient_clipping_max_norm,
+                "gradient_steps": self.agent.gradient_steps,
+            },
+            # Temperature parameter
+            "log_alpha": self.agent.log_alpha.detach().cpu(),
+            # Normalization
+            "normalize_observation": self.normalize_observation,
+            # HER parameters
+            "her": {
+                "enabled": self.experience_replay_type == "her",
+                "experience_replay_type": self.experience_replay_type,
+                "n_sampled_goal": self.n_sampled_goal,
+                "goal_selection_strategy": self.goal_selection_strategy,
+            },
         }
 
-        # --- optimizer state'leri (geriye uyumlu) ---
-        try:
-            # Ensemble tek optimizer
-            if hasattr(self.agent, "critic_optimizer"):
-                model_state.update(
-                    {
-                        "actor_optimizer": self.agent.actor_optimizer.state_dict(),
-                        "critic_optimizer": self.agent.critic_optimizer.state_dict(),
-                        "alpha_optimizer": self.agent.alpha_optimizer.state_dict(),
-                    }
+        # === Optimizer States (optional, for resuming training) ===
+        if save_optimizer:
+            optimizer_state = {}
+            try:
+                optimizer_state["actor_optimizer"] = (
+                    self.agent.actor_optimizer.state_dict()
                 )
-            else:
-                # Eski iki optimizer
-                model_state.update(
-                    {
-                        "actor_optimizer": self.agent.actor_optimizer.state_dict(),
-                        "critic1_optimizer": self.agent.critic1_optimizer.state_dict(),
-                        "critic2_optimizer": self.agent.critic2_optimizer.state_dict(),
-                        "alpha_optimizer": self.agent.alpha_optimizer.state_dict(),
-                    }
+                optimizer_state["alpha_optimizer"] = (
+                    self.agent.alpha_optimizer.state_dict()
                 )
-        except Exception as e:
-            print(f"[SAC.save] Optimizer states not saved: {e}")
 
+                if hasattr(self.agent, "critic_optimizer"):
+                    optimizer_state["critic_optimizer"] = (
+                        self.agent.critic_optimizer.state_dict()
+                    )
+                elif hasattr(self.agent, "critic1_optimizer"):
+                    optimizer_state["critic1_optimizer"] = (
+                        self.agent.critic1_optimizer.state_dict()
+                    )
+                    optimizer_state["critic2_optimizer"] = (
+                        self.agent.critic2_optimizer.state_dict()
+                    )
+
+                model_state["optimizer_state"] = optimizer_state
+            except Exception as e:
+                print(f"[SAC.save] Warning: Could not save optimizer states: {e}")
+
+        # === Replay Buffer (optional, large) ===
+        if save_replay_buffer:
+            try:
+                buffer_state = {
+                    "size": self.agent.experience_replay.size,
+                    "ptr": self.agent.experience_replay.ptr,
+                }
+                # Only save actual data if buffer has content
+                if self.agent.experience_replay.size > 0:
+                    size = self.agent.experience_replay.size
+                    buffer_state["state_buffer"] = (
+                        self.agent.experience_replay.state_buffer[:size].cpu()
+                    )
+                    buffer_state["action_buffer"] = (
+                        self.agent.experience_replay.action_buffer[:size].cpu()
+                    )
+                    buffer_state["reward_buffer"] = (
+                        self.agent.experience_replay.reward_buffer[:size].cpu()
+                    )
+                    buffer_state["next_state_buffer"] = (
+                        self.agent.experience_replay.next_state_buffer[:size].cpu()
+                    )
+                    buffer_state["done_buffer"] = (
+                        self.agent.experience_replay.done_buffer[:size].cpu()
+                    )
+
+                    # HER-specific buffers
+                    if self.agent.use_her:
+                        buffer_state["achieved_goal_buffer"] = (
+                            self.agent.experience_replay.achieved_goal_buffer[
+                                :size
+                            ].cpu()
+                        )
+                        buffer_state["desired_goal_buffer"] = (
+                            self.agent.experience_replay.desired_goal_buffer[
+                                :size
+                            ].cpu()
+                        )
+                        buffer_state["next_achieved_goal_buffer"] = (
+                            self.agent.experience_replay.next_achieved_goal_buffer[
+                                :size
+                            ].cpu()
+                        )
+
+                model_state["replay_buffer"] = buffer_state
+            except Exception as e:
+                print(f"[SAC.save] Warning: Could not save replay buffer: {e}")
+
+        # Save to disk
         torch.save(model_state, save_path)
-        if self.log_model:
+        print(f"[SAC.save] Checkpoint saved to: {save_path}")
+
+        if self.log_model and self.mlflow_logger:
             self.mlflow_logger.log_artifact(
-                local_path=save_path, artifact_path=self.models_folder
+                local_path=str(save_path), artifact_path=str(self.models_folder)
             )
+
+        return save_path
+
+    def _get_obs_space_info(self):
+        """Get observation space info for saving."""
+        from gymnasium.spaces import Dict as DictSpace
+
+        if isinstance(self.env.observation_space, DictSpace):
+            return {
+                "type": "goal_env",
+                "observation": self.env.observation_space["observation"].shape,
+                "achieved_goal": self.env.observation_space["achieved_goal"].shape,
+                "desired_goal": self.env.observation_space["desired_goal"].shape,
+            }
+        else:
+            return {
+                "type": "standard",
+                "shape": self.env.observation_space.shape,
+            }
 
     def load(
         self,
         folder: str = None,
         checkpoint: str = "",
-        eval_mode: bool = True,
-        model_path=None,
+        model_path: str = None,
+        load_optimizer: bool = True,
+        load_replay_buffer: bool = False,
+        load_hyperparams: bool = True,
+        strict: bool = False,
+        transfer_learning: bool = False,
+        eval_mode: bool = None,  # Backward compatibility (deprecated)
     ):
-        from pathlib import Path
-        import torch
+        """
+        Load model checkpoint.
 
+        Args:
+            folder: Directory containing the checkpoint
+            checkpoint: Checkpoint name suffix
+            model_path: Full path to checkpoint file (overrides folder/checkpoint)
+            load_optimizer: Whether to load optimizer states
+            load_replay_buffer: Whether to load replay buffer
+            load_hyperparams: Whether to load hyperparameters (tau, gamma, etc.)
+            strict: If True, raise error on state_dict mismatch; if False, load what matches
+            transfer_learning: If True, only loads network weights, resets training state
+            eval_mode: [DEPRECATED] Use load_optimizer=False instead
+
+        Returns:
+            Dict with info about what was loaded
+        """
+        # Handle deprecated eval_mode parameter
+        if eval_mode is not None:
+            import warnings
+
+            warnings.warn(
+                "eval_mode is deprecated. Use load_optimizer=False for evaluation.",
+                DeprecationWarning,
+            )
+            load_optimizer = not eval_mode
+
+        # Determine load path
         if model_path:
             model_path = Path(model_path).with_suffix(".ckpt")
         else:
-            env_name = self.env.spec.id
-            folder: Path = Path(folder)
+            env_name = (
+                self.env.spec.id
+                if hasattr(self.env, "spec") and self.env.spec
+                else "custom_env"
+            )
+            folder = Path(folder) if folder else self.models_folder
             model_path = (
                 folder / f"{env_name}_{self.algo_name}_{self.device}_{checkpoint}"
             ).with_suffix(".ckpt")
 
-        loaded_model = torch.load(model_path, map_location=self.device)
+        if not model_path.exists():
+            raise FileNotFoundError(f"Checkpoint not found: {model_path}")
 
-        # --- Checkpoint'ten meta ---
-        ckpt_network_type = loaded_model.get("network_type", self.network_type)
-        ckpt_network_arch = loaded_model.get("network_arch", self.network_arch)
-        ckpt_num_q_heads = loaded_model.get("num_q_heads", 2)
+        loaded = torch.load(model_path, map_location=self.device, weights_only=False)
+        load_info = {"path": str(model_path), "loaded": [], "warnings": []}
 
-        # --- Mevcut ağ ile checkpoint uyum kontrolü ---
-        def current_num_heads():
-            if hasattr(self.agent.net, "critics"):
-                try:
-                    return len(self.agent.net.critics)
-                except Exception:
-                    return 2
-            return 2
+        # === Version Check ===
+        version = loaded.get("version", "1.0")
+        load_info["version"] = version
 
-        needs_rebuild = (
-            (self.network_type != ckpt_network_type)
-            or (self.network_arch != ckpt_network_arch)
-            or (current_num_heads() != ckpt_num_q_heads)
+        # === Network Architecture Check ===
+        ckpt_network_type = loaded.get("network_type", self.network_type)
+        ckpt_network_arch = loaded.get("network_arch", self.network_arch)
+        ckpt_num_q_heads = loaded.get("num_q_heads", 2)
+
+        current_num_heads = (
+            len(self.agent.net.critics) if hasattr(self.agent.net, "critics") else 2
         )
 
-        if needs_rebuild:
-            # Ağı checkpoint meta ile yeniden kur
+        arch_mismatch = (
+            self.network_type != ckpt_network_type
+            or self.network_arch != ckpt_network_arch
+            or current_num_heads != ckpt_num_q_heads
+        )
+
+        if arch_mismatch and not transfer_learning:
+            # Rebuild network to match checkpoint
+            print(f"[SAC.load] Rebuilding network to match checkpoint architecture")
             if ckpt_network_type == "mlp":
-                nn_new = make_sac_networks_mlp(
+                new_net = make_sac_networks_mlp(
                     env=self.env,
                     network_arch=ckpt_network_arch,
                     device=self.device,
                     num_q_heads=ckpt_num_q_heads,
                 )
             else:
-                nn_new = make_sac_networks_cnn(
-                    env=self.env, device=self.device
-                )  # cnn’de de heads varsa ekle
-            self.agent.net = nn_new
-            # Sınıf alanlarını güncelle
+                new_net = make_sac_networks_cnn(env=self.env, device=self.device)
+
+            self.agent.net = new_net
             self.network_type = ckpt_network_type
             self.network_arch = ckpt_network_arch
+            load_info["loaded"].append("rebuilt_network")
 
-        # --- Ağı yükle (toleranslı) ---
-        missing, unexpected = self.agent.net.load_state_dict(
-            loaded_model["state_dict"], strict=False
-        )
-        if missing or unexpected:
-            print(
-                f"[SAC.load] state_dict sync -> missing:{len(missing)} unexpected:{len(unexpected)}"
-            )
+        # === Load Network Weights ===
+        state_dict = loaded.get("state_dict", loaded)  # Support old format
+        try:
+            if strict:
+                self.agent.net.load_state_dict(state_dict)
+                load_info["loaded"].append("state_dict (strict)")
+            else:
+                missing, unexpected = self.agent.net.load_state_dict(
+                    state_dict, strict=False
+                )
+                load_info["loaded"].append("state_dict")
+                if missing:
+                    load_info["warnings"].append(f"Missing keys: {len(missing)}")
+                if unexpected:
+                    load_info["warnings"].append(f"Unexpected keys: {len(unexpected)}")
+        except Exception as e:
+            load_info["warnings"].append(f"state_dict load error: {e}")
 
-        # --- Agent parametreleri ---
-        self.agent.tau = loaded_model.get("tau", self.agent.tau)
-        self.agent.gamma = loaded_model.get("gamma", self.agent.gamma)
-        self.agent.batch_size = loaded_model.get("batch_size", self.agent.batch_size)
-        self.agent.target_entropy = loaded_model.get(
-            "target_entropy", self.agent.target_entropy
-        )
-        self.agent.learning_starts = loaded_model.get(
-            "learning_starts", self.agent.learning_starts
-        )
-        self.agent.gradient_clipping_max_norm = loaded_model.get(
-            "gradient_clipping_max_norm", self.agent.gradient_clipping_max_norm
-        )
-        self.agent.steps_done = loaded_model.get("steps_done", 0)
+        # === Transfer Learning Mode ===
+        if transfer_learning:
+            # Reset training state for new task
+            self.agent.steps_done = 0
+            if hasattr(self.agent.experience_replay, "clear"):
+                self.agent.experience_replay.clear()
+            load_info["loaded"].append("transfer_learning_mode")
+            print(f"[SAC.load] Transfer learning mode: training state reset")
+            return load_info
 
-        # --- Alpha parametresi ---
-        if "log_alpha" in loaded_model:
+        # === Load Training State ===
+        self.agent.steps_done = loaded.get("steps_done", 0)
+        load_info["loaded"].append(f"steps_done={self.agent.steps_done}")
+
+        # === Load Temperature (Alpha) ===
+        if "log_alpha" in loaded:
+            alpha_val = loaded["log_alpha"]
+            if hasattr(alpha_val, "item"):
+                alpha_val = alpha_val.item()
             self.agent.log_alpha = torch.tensor(
-                loaded_model["log_alpha"].item(),
+                alpha_val,
                 dtype=torch.float32,
                 requires_grad=True,
                 device=self.device,
             )
+            # Recreate alpha optimizer with new parameter
+            lr = self.agent.alpha_optimizer.param_groups[0]["lr"]
+            self.agent.alpha_optimizer = torch.optim.Adam([self.agent.log_alpha], lr=lr)
+            load_info["loaded"].append("log_alpha")
 
-        # --- Optimizer'lar (eval_mode değilse) ---
-        if not eval_mode:
+        # === Load Hyperparameters ===
+        if load_hyperparams:
+            hyperparams = loaded.get("hyperparams", loaded)  # Support old format
+
+            self.agent.tau = hyperparams.get("tau", self.agent.tau)
+            self.agent.gamma = hyperparams.get("gamma", self.agent.gamma)
+            self.agent.batch_size = hyperparams.get("batch_size", self.agent.batch_size)
+            self.agent.target_entropy = hyperparams.get(
+                "target_entropy", self.agent.target_entropy
+            )
+            self.agent.learning_starts = hyperparams.get(
+                "learning_starts", self.agent.learning_starts
+            )
+            self.agent.gradient_clipping_max_norm = hyperparams.get(
+                "gradient_clipping_max_norm", self.agent.gradient_clipping_max_norm
+            )
+            self.agent.gradient_steps = hyperparams.get(
+                "gradient_steps", getattr(self.agent, "gradient_steps", 1)
+            )
+
+            self.normalize_observation = loaded.get(
+                "normalize_observation", self.normalize_observation
+            )
+            load_info["loaded"].append("hyperparams")
+
+        # === Load HER Settings ===
+        her_config = loaded.get("her", {})
+        if her_config.get("enabled", False):
+            self.experience_replay_type = her_config.get(
+                "experience_replay_type", self.experience_replay_type
+            )
+            self.n_sampled_goal = her_config.get("n_sampled_goal", self.n_sampled_goal)
+            self.goal_selection_strategy = her_config.get(
+                "goal_selection_strategy", self.goal_selection_strategy
+            )
+            load_info["loaded"].append("her_config")
+
+        # === Load Optimizer States ===
+        if load_optimizer and "optimizer_state" in loaded:
             try:
-                # Ensemble tek optimizer yolu
-                if "critic_optimizer" in loaded_model and hasattr(
+                opt_state = loaded["optimizer_state"]
+
+                if "actor_optimizer" in opt_state:
+                    self.agent.actor_optimizer.load_state_dict(
+                        opt_state["actor_optimizer"]
+                    )
+                if "alpha_optimizer" in opt_state:
+                    self.agent.alpha_optimizer.load_state_dict(
+                        opt_state["alpha_optimizer"]
+                    )
+
+                if "critic_optimizer" in opt_state and hasattr(
                     self.agent, "critic_optimizer"
                 ):
-                    if "actor_optimizer" in loaded_model:
-                        self.agent.actor_optimizer.load_state_dict(
-                            loaded_model["actor_optimizer"]
-                        )
                     self.agent.critic_optimizer.load_state_dict(
-                        loaded_model["critic_optimizer"]
+                        opt_state["critic_optimizer"]
                     )
-                    if "alpha_optimizer" in loaded_model:
-                        self.agent.alpha_optimizer.load_state_dict(
-                            loaded_model["alpha_optimizer"]
-                        )
-                # Eski iki-optimizer yolu
-                elif (
-                    "critic1_optimizer" in loaded_model
-                    and "critic2_optimizer" in loaded_model
+                elif "critic1_optimizer" in opt_state and hasattr(
+                    self.agent, "critic1_optimizer"
                 ):
-                    if hasattr(self.agent, "critic1_optimizer") and hasattr(
-                        self.agent, "critic2_optimizer"
-                    ):
-                        if "actor_optimizer" in loaded_model:
-                            self.agent.actor_optimizer.load_state_dict(
-                                loaded_model["actor_optimizer"]
-                            )
-                        self.agent.critic1_optimizer.load_state_dict(
-                            loaded_model["critic1_optimizer"]
-                        )
-                        self.agent.critic2_optimizer.load_state_dict(
-                            loaded_model["critic2_optimizer"]
-                        )
-                        if "alpha_optimizer" in loaded_model:
-                            self.agent.alpha_optimizer.load_state_dict(
-                                loaded_model["alpha_optimizer"]
-                            )
-            except ValueError as e:
-                print(f"[SAC.load] Warning: could not load optimizer states: {e}")
+                    self.agent.critic1_optimizer.load_state_dict(
+                        opt_state["critic1_optimizer"]
+                    )
+                    self.agent.critic2_optimizer.load_state_dict(
+                        opt_state["critic2_optimizer"]
+                    )
 
-        # Sınıf alanları
-        self.normalize_observation = loaded_model.get(
-            "normalize_observation", self.normalize_observation
+                load_info["loaded"].append("optimizer_state")
+            except Exception as e:
+                load_info["warnings"].append(f"optimizer_state load error: {e}")
+        # Support old format without "optimizer_state" wrapper
+        elif load_optimizer and "actor_optimizer" in loaded:
+            try:
+                self.agent.actor_optimizer.load_state_dict(loaded["actor_optimizer"])
+                if "alpha_optimizer" in loaded:
+                    self.agent.alpha_optimizer.load_state_dict(
+                        loaded["alpha_optimizer"]
+                    )
+                if "critic_optimizer" in loaded and hasattr(
+                    self.agent, "critic_optimizer"
+                ):
+                    self.agent.critic_optimizer.load_state_dict(
+                        loaded["critic_optimizer"]
+                    )
+                elif "critic1_optimizer" in loaded and hasattr(
+                    self.agent, "critic1_optimizer"
+                ):
+                    self.agent.critic1_optimizer.load_state_dict(
+                        loaded["critic1_optimizer"]
+                    )
+                    self.agent.critic2_optimizer.load_state_dict(
+                        loaded["critic2_optimizer"]
+                    )
+                load_info["loaded"].append("optimizer_state (old format)")
+            except Exception as e:
+                load_info["warnings"].append(f"optimizer_state load error: {e}")
+
+        # === Load Replay Buffer ===
+        if load_replay_buffer and "replay_buffer" in loaded:
+            try:
+                buf = loaded["replay_buffer"]
+                self.agent.experience_replay.size = buf["size"]
+                self.agent.experience_replay.ptr = buf["ptr"]
+
+                if buf["size"] > 0:
+                    size = buf["size"]
+                    self.agent.experience_replay.state_buffer[:size] = buf[
+                        "state_buffer"
+                    ].to(self.device)
+                    self.agent.experience_replay.action_buffer[:size] = buf[
+                        "action_buffer"
+                    ].to(self.device)
+                    self.agent.experience_replay.reward_buffer[:size] = buf[
+                        "reward_buffer"
+                    ].to(self.device)
+                    self.agent.experience_replay.next_state_buffer[:size] = buf[
+                        "next_state_buffer"
+                    ].to(self.device)
+                    self.agent.experience_replay.done_buffer[:size] = buf[
+                        "done_buffer"
+                    ].to(self.device)
+
+                    # HER-specific buffers
+                    if self.agent.use_her and "achieved_goal_buffer" in buf:
+                        self.agent.experience_replay.achieved_goal_buffer[:size] = buf[
+                            "achieved_goal_buffer"
+                        ].to(self.device)
+                        self.agent.experience_replay.desired_goal_buffer[:size] = buf[
+                            "desired_goal_buffer"
+                        ].to(self.device)
+                        self.agent.experience_replay.next_achieved_goal_buffer[
+                            :size
+                        ] = buf["next_achieved_goal_buffer"].to(self.device)
+
+                load_info["loaded"].append(f"replay_buffer (size={buf['size']})")
+            except Exception as e:
+                load_info["warnings"].append(f"replay_buffer load error: {e}")
+
+        # Print summary
+        print(f"[SAC.load] Loaded from: {model_path}")
+        print(f"[SAC.load] Components: {', '.join(load_info['loaded'])}")
+        if load_info["warnings"]:
+            print(f"[SAC.load] Warnings: {', '.join(load_info['warnings'])}")
+
+        return load_info
+
+    @classmethod
+    def load_for_eval(cls, model_path: str, env, device: str = "cpu", **kwargs):
+        """
+        Class method to load a model for evaluation only.
+
+        Args:
+            model_path: Path to checkpoint
+            env: Environment (can be different from training env for transfer)
+            device: Device to load model on
+            **kwargs: Additional SAC constructor arguments
+
+        Returns:
+            SAC instance ready for evaluation
+        """
+        loaded = torch.load(model_path, map_location=device, weights_only=False)
+
+        # Extract architecture from checkpoint
+        network_arch = loaded.get("network_arch", [256, 256])
+        network_type = loaded.get("network_type", "mlp")
+        num_q_heads = loaded.get("num_q_heads", 2)
+
+        # Get HER settings
+        her_config = loaded.get("her", {})
+        experience_replay_type = her_config.get("experience_replay_type", "er")
+        n_sampled_goal = her_config.get("n_sampled_goal", 4)
+        goal_selection_strategy = her_config.get("goal_selection_strategy", "future")
+
+        # Create SAC instance
+        sac = cls(
+            env=env,
+            network_arch=network_arch,
+            network_type=network_type,
+            num_q_heads=num_q_heads,
+            device=device,
+            experience_replay_type=experience_replay_type,
+            n_sampled_goal=n_sampled_goal,
+            goal_selection_strategy=goal_selection_strategy,
+            evaluation=False,  # Don't need eval env
+            **kwargs,
         )
+
+        # Load weights
+        sac.load(model_path=model_path, load_optimizer=False, load_replay_buffer=False)
+
+        # Set to eval mode
+        sac.agent.net.eval()
+
+        return sac
 
     def train_goal_conditioned(self, trial=None):
         """
